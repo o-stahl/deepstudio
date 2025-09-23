@@ -2,7 +2,7 @@
 
 **Agentic Browser-based Website Builder** (v1.0.0)
 
-**Links**: [GitHub Repository](https://github.com/o-stahl/deepstudio) | [Live Demo](https://huggingface.co/spaces/o-stahl/deepstudio)
+**Links**: [GitHub Repository](https://github.com/o-stahl/deepstudio) | [Live Demo](https://huggingface.co/spaces/otst/deepstudio)
 
 DeepStudio is a fork from @enzostvs' DeepSite v2 that over the months of tinkering became a BYOK (Bring Your Own Key) agentic browser-based website builder where you describe what you want and an agent writes the code.
 
