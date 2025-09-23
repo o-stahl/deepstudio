@@ -1,0 +1,192 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter-sans);
+  --font-mono: var(--font-ptSans-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.65 0.20 40);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.95 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.96 0.02 40);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.65 0.22 40);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  
+  /* Panel tint colors - Light mode */
+  --panel-assistant-tint: oklch(0.65 0.2 145 / 0.02); /* Green tint - weaker */
+  --panel-files-tint: oklch(0.6 0.15 220 / 0.02); /* Blue tint - weaker */
+  --panel-editor-tint: oklch(0.55 0.18 285 / 0.02); /* Purple tint - weaker */
+  --panel-preview-tint: oklch(0.7 0.2 45 / 0.02); /* Orange tint - weaker */
+  
+  /* Panel RGB values for headers */
+  --panel-files-rgb: 59, 130, 246; /* Blue */
+  --panel-editor-rgb: 147, 51, 234; /* Purple */
+  --panel-preview-rgb: 251, 146, 60; /* Orange */
+  
+  /* Project page tint colors - Light mode */
+  --project-card-tint: oklch(0.65 0.18 40 / 0.03); /* Subtle orange tint */
+  --project-background-tint: oklch(0.65 0.18 40 / 0.015); /* Very subtle orange tint */
+  
+  /* Sidebar button active colors - Light mode */
+  --button-assistant-active: oklch(0.65 0.2 145); /* Green */
+  --button-files-active: oklch(0.6 0.15 220); /* Blue */
+  --button-editor-active: oklch(0.55 0.18 285); /* Purple */
+  --button-preview-active: oklch(0.7 0.2 45); /* Orange */
+}
+
+.dark {
+  --background: oklch(0.10 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.70 0.22 40);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.25 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.30 0.03 40);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.30 0 0);
+  --input: oklch(0.30 0 0);
+  --ring: oklch(0.70 0.25 40);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  
+  /* Panel tint colors - Dark mode */
+  --panel-assistant-tint: oklch(0.65 0.2 145 / 0.02); /* Green tint - weaker */
+  --panel-files-tint: oklch(0.6 0.15 220 / 0.02); /* Blue tint - weaker */
+  --panel-editor-tint: oklch(0.55 0.18 285 / 0.02); /* Purple tint - weaker */
+  --panel-preview-tint: oklch(0.7 0.2 45 / 0.02); /* Orange tint - weaker */
+  
+  /* Panel RGB values for headers */
+  --panel-files-rgb: 59, 130, 246; /* Blue */
+  --panel-editor-rgb: 147, 51, 234; /* Purple */
+  --panel-preview-rgb: 251, 146, 60; /* Orange */
+  
+  /* Project page tint colors - Dark mode */
+  --project-card-tint: oklch(0.65 0.18 40 / 0.04); /* Subtle orange tint */
+  --project-background-tint: oklch(0.65 0.18 40 / 0.02); /* Very subtle orange tint */
+  
+  /* Sidebar button active colors - Dark mode */
+  --button-assistant-active: oklch(0.65 0.2 145); /* Green */
+  --button-files-active: oklch(0.6 0.15 220); /* Blue */
+  --button-editor-active: oklch(0.55 0.18 285); /* Purple */
+  --button-preview-active: oklch(0.7 0.2 45); /* Orange */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+}
+
+.background__noisy {
+  @apply bg-blend-normal pointer-events-none opacity-90;
+  background-size: 25vw auto;
+  background-image: url("/background_noisy.webp");
+  @apply fixed w-screen h-screen -z-1 top-0 left-0;
+}
+
+
+/* Override any Monaco Editor default dark styles in light mode */
+.light .monaco-editor .margin,
+.light .monaco-editor .monaco-editor-background,
+.light .monaco-editor {
+  background-color: #ffffff !important;
+}
+
+.dark .monaco-editor .margin,
+.dark .monaco-editor .monaco-editor-background,
+.dark .monaco-editor {
+  background-color: #1e1e1e !important;
+}
+
+.matched-line {
+  @apply bg-sky-500/30;
+}
