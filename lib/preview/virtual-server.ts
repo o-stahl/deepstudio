@@ -1,6 +1,7 @@
 import { VirtualFileSystem } from '../vfs';
 import { VirtualFile } from '../vfs/types';
 import { ProcessedFile, Route, CompiledProject } from './types';
+import Handlebars from 'handlebars';
 
 export class VirtualServer {
   private vfs: VirtualFileSystem;
@@ -8,6 +9,9 @@ export class VirtualServer {
   private baseUrl: string;
   private blobUrls: Map<string, string> = new Map();
   private fileHashes: Map<string, string> = new Map();
+  private handlebars: typeof Handlebars;
+  private templateCache: Map<string, HandlebarsTemplateDelegate> = new Map();
+  private partialsRegistered: boolean = false;
 
   constructor(vfs: VirtualFileSystem, projectId: string, existingBlobUrls?: Map<string, string>) {
     this.vfs = vfs;
@@ -16,9 +20,110 @@ export class VirtualServer {
     if (existingBlobUrls) {
       this.blobUrls = new Map(existingBlobUrls);
     }
+    
+    // Initialize Handlebars instance
+    this.handlebars = Handlebars.create();
+    this.registerHelpers();
+  }
+
+  private registerHelpers(): void {
+    // Register common comparison helpers that LLMs expect
+    this.handlebars.registerHelper('eq', (a: any, b: any) => a === b);
+    this.handlebars.registerHelper('ne', (a: any, b: any) => a !== b);
+    this.handlebars.registerHelper('lt', (a: any, b: any) => a < b);
+    this.handlebars.registerHelper('gt', (a: any, b: any) => a > b);
+    this.handlebars.registerHelper('lte', (a: any, b: any) => a <= b);
+    this.handlebars.registerHelper('gte', (a: any, b: any) => a >= b);
+    
+    // Logical helpers
+    this.handlebars.registerHelper('and', function(this: any) {
+      const args = Array.prototype.slice.call(arguments, 0, -1);
+      return args.every((arg: any) => arg);
+    });
+    this.handlebars.registerHelper('or', function(this: any) {
+      const args = Array.prototype.slice.call(arguments, 0, -1);
+      return args.some((arg: any) => arg);
+    });
+    this.handlebars.registerHelper('not', (value: any) => !value);
+    
+    // Math helpers
+    this.handlebars.registerHelper('add', (a: number, b: number) => a + b);
+    this.handlebars.registerHelper('subtract', (a: number, b: number) => a - b);
+    this.handlebars.registerHelper('multiply', (a: number, b: number) => a * b);
+    this.handlebars.registerHelper('divide', (a: number, b: number) => a / b);
+    
+    // String helpers
+    this.handlebars.registerHelper('uppercase', (str: string) => str?.toUpperCase());
+    this.handlebars.registerHelper('lowercase', (str: string) => str?.toLowerCase());
+    this.handlebars.registerHelper('concat', function(this: any) {
+      const args = Array.prototype.slice.call(arguments, 0, -1);
+      return args.join('');
+    });
+    
+    // Utility helpers
+    this.handlebars.registerHelper('json', (context: any) => JSON.stringify(context, null, 2));
+    this.handlebars.registerHelper('formatDate', (date: Date | string) => {
+      const d = new Date(date);
+      return d.toLocaleDateString();
+    });
+  }
+
+  private async registerPartials(): Promise<void> {
+    if (this.partialsRegistered) {
+      return;
+    }
+    
+    try {
+      // Look for templates in /templates directory
+      const templateFiles = await this.vfs.listDirectory(this.projectId, '/templates');
+      
+      
+      for (const file of templateFiles) {
+        if (file.type === 'template' || file.path.endsWith('.hbs') || file.path.endsWith('.handlebars')) {
+          // More robust partial name extraction
+          let partialName = file.name
+            .replace(/\.hbs$/, '')
+            .replace(/\.handlebars$/, '');
+          
+          // Remove any leading path components if they exist in the name
+          if (partialName.includes('/')) {
+            partialName = partialName.split('/').pop() || partialName;
+          }
+          
+          const content = file.content as string;
+          this.handlebars.registerPartial(partialName, content);
+        }
+      }
+      
+      this.partialsRegistered = true;
+    } catch (error) {
+      // Templates directory might not exist, which is fine
+    }
+  }
+
+  private async compileTemplate(templatePath: string, context: any = {}): Promise<string> {
+    // Check cache first
+    let compiled = this.templateCache.get(templatePath);
+    
+    if (!compiled) {
+      try {
+        const file = await this.vfs.readFile(this.projectId, templatePath);
+        const templateContent = file.content as string;
+        compiled = this.handlebars.compile(templateContent);
+        this.templateCache.set(templatePath, compiled);
+      } catch (error) {
+        console.error(`Failed to compile template ${templatePath}:`, error);
+        return '';
+      }
+    }
+    
+    return compiled(context);
   }
 
   async compileProject(incrementalUpdate = false): Promise<CompiledProject> {
+    // Register partials before processing
+    await this.registerPartials();
+    
     const files = await this.vfs.listDirectory(this.projectId, '/');
     
     const oldBlobUrls = new Map(this.blobUrls);
@@ -27,6 +132,11 @@ export class VirtualServer {
     
     for (const file of files) {
       let processedFile: ProcessedFile;
+      
+      // Skip template files - they're used as partials
+      if (file.type === 'template') {
+        continue;
+      }
       
       if (file.type === 'image' || file.type === 'video') {
         processedFile = {
@@ -163,6 +273,10 @@ export class VirtualServer {
   private async processHTML(file: VirtualFile): Promise<ProcessedFile> {
     let content = file.content as string;
 
+    // Process Handlebars templates first
+    content = await this.processHandlebarsTemplates(content);
+    
+    // Then process internal references
     content = await this.processInternalReferences(content);
 
     return {
@@ -170,6 +284,31 @@ export class VirtualServer {
       content,
       mimeType: file.mimeType
     };
+  }
+  
+  private async processHandlebarsTemplates(content: string): Promise<string> {
+    // Ensure partials are registered
+    await this.registerPartials();
+    
+    try {
+      // Look for a data.json file for template context
+      let context = {};
+      try {
+        const dataFile = await this.vfs.readFile(this.projectId, '/data.json');
+        context = JSON.parse(dataFile.content as string);
+      } catch {
+        // No data file, use empty context
+      }
+      
+      // Compile the content as a Handlebars template
+      const template = this.handlebars.compile(content);
+      const result = template(context);
+      return result;
+    } catch (error) {
+      console.error('VirtualServer: Error processing Handlebars templates:', error);
+      // Return original content if processing fails
+      return content;
+    }
   }
 
   private async processCSS(file: VirtualFile, blobUrls: Map<string, string>): Promise<ProcessedFile> {
@@ -288,6 +427,10 @@ export class VirtualServer {
       URL.revokeObjectURL(url);
     }
     this.blobUrls.clear();
+    
+    // Also clear template cache and re-register partials on next compile
+    this.templateCache.clear();
+    this.partialsRegistered = false;
   }
 
   async getCompiledFile(path: string): Promise<ProcessedFile | null> {

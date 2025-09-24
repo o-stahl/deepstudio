@@ -42,7 +42,7 @@ export interface VirtualFile {
   projectId: string;
   path: string;
   name: string;
-  type: 'html' | 'css' | 'js' | 'json' | 'text' | 'image' | 'video' | 'binary';
+  type: 'html' | 'css' | 'js' | 'json' | 'text' | 'template' | 'image' | 'video' | 'binary';
   content: string | ArrayBuffer;
   mimeType: string;
   size: number;
@@ -83,6 +83,7 @@ export const MIME_TYPES: Record<FileType, string> = {
   js: 'application/javascript',
   json: 'application/json',
   text: 'text/plain',
+  template: 'text/x-handlebars-template',
   image: 'image/*',
   video: 'video/*',
   binary: 'application/octet-stream'
@@ -94,6 +95,7 @@ export const SUPPORTED_EXTENSIONS = {
   js: ['js', 'mjs', 'jsx'],
   json: ['json'],
   text: ['txt', 'md', 'xml', 'svg'],
+  template: ['hbs', 'handlebars'],
   image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp'],
   video: ['mp4', 'webm', 'ogg']
 };
@@ -104,6 +106,7 @@ export const FILE_SIZE_LIMITS = {
   css: 5 * 1024 * 1024,
   js: 5 * 1024 * 1024,
   json: 5 * 1024 * 1024,
+  template: 5 * 1024 * 1024,
   image: 10 * 1024 * 1024,
   video: 50 * 1024 * 1024,
   binary: 10 * 1024 * 1024
@@ -140,6 +143,9 @@ export function getSpecificMimeType(path: string): string {
     'md': 'text/markdown',
     'xml': 'application/xml',
     'svg': 'image/svg+xml',
+    
+    'hbs': 'text/x-handlebars-template',
+    'handlebars': 'text/x-handlebars-template',
     
     'png': 'image/png',
     'jpg': 'image/jpeg',

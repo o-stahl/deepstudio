@@ -1,6 +1,6 @@
 {
   "name": "deepstudio-v1",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "license": "MIT",
   "scripts": {
@@ -32,6 +32,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "handlebars": "^4.7.8",
     "jszip": "^3.10.1",
     "lucide-react": "^0.513.0",
     "monaco-editor": "^0.52.2",

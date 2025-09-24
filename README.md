@@ -1,8 +1,8 @@
 # DeepStudio
 
-**Agentic Browser-based Website Builder** (v1.0.0)
+**Agentic Browser-based Website Builder** (v1.0.1)
 
-**Links**: [GitHub Repository](https://github.com/o-stahl/deepstudio) | [Live Demo](https://huggingface.co/spaces/otst/deepstudio)
+**Links**: [GitHub Repository](https://github.com/o-stahl/deepstudio) | [Live Demo](https://huggingface.co/spaces/otst/deepstudio) | [Changelog](./CHANGELOG.md)
 
 DeepStudio is a fork from @enzostvs' DeepSite v2 that over the months of tinkering became a BYOK (Bring Your Own Key) agentic browser-based website builder where you describe what you want and an agent writes the code.
 
@@ -59,7 +59,7 @@ If you make something with the app I would be thrilled if you could share what y
 
 | Type | Formats | Limits |
 |------|---------|--------|
-| **Code** | HTML, CSS, JS/JSX, JSON | 5MB text files |
+| **Code** | HTML, CSS, JS/JSX, JSON, HBS/Handlebars | 5MB text files |
 | **Docs** | TXT, MD, XML, SVG | 5MB text files |
 | **Media** | PNG, JPG, GIF, WebP, MP4, WebM | 10MB images, 50MB video |
 

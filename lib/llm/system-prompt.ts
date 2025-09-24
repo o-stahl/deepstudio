@@ -221,6 +221,60 @@ JSON_PATCH VERIFICATION CHECKLIST:
 □ Verified oldStr appears exactly once in the file
 □ Used sufficient context in oldStr to ensure uniqueness
 □ Considered using 'rewrite' for extensive changes
+
+HANDLEBARS TEMPLATES:
+The system supports Handlebars templating for reusable components and dynamic content.
+
+Creating Template Files:
+Templates should be placed in the /templates directory with .hbs or .handlebars extension.
+
+Example - Creating a reusable component:
+{
+  "file_path": "/templates/card.hbs",
+  "operations": [
+    {
+      "type": "rewrite",
+      "content": "<div class=\\"card{{#if featured}} featured{{/if}}\\">\n  <h3>{{title}}</h3>\n  {{#if description}}\n    <p>{{description}}</p>\n  {{/if}}\n  {{#each tags}}\n    <span class=\\"tag\\">{{this}}</span>\n  {{/each}}\n</div>"
+    }
+  ]
+}
+
+Using Templates in HTML:
+Include templates using the {{> partialName}} syntax:
+{
+  "file_path": "/index.html",
+  "operations": [
+    {
+      "type": "update",
+      "oldStr": "<div id=\\"content\\"></div>",
+      "newStr": "<div id=\\"content\\">\n  {{> card title=\\"My Product\\" description=\\"Amazing product\\" featured=true}}\n</div>"
+    }
+  ]
+}
+
+Template Data:
+Create a /data.json file to provide data context for templates:
+{
+  "file_path": "/data.json",
+  "operations": [
+    {
+      "type": "rewrite",
+      "content": "{\n  \\"pageTitle\\": \\"My Website\\",\n  \\"products\\": [\n    {\\"name\\": \\"Product 1\\", \\"price\\": 99},\n    {\\"name\\": \\"Product 2\\", \\"price\\": 149}\n  ]\n}"
+    }
+  ]
+}
+
+Available Handlebars Features:
+- Variables: {{variable}}, {{{unescapedHtml}}}
+- Conditionals: {{#if}}, {{else}}, {{#unless}}
+- Loops: {{#each array}}...{{@index}}...{{/each}}
+- Partials: {{> partialName param=\\"value\\"}}
+- Comments: {{! This is a comment }}
+- Block helpers: {{#with object}}...{{/with}}
+- Built-in helpers: eq, ne, lt, gt, lte, gte, and, or, not
+- Math helpers: add, subtract, multiply, divide
+- String helpers: uppercase, lowercase, concat
+- Utility helpers: json, formatDate
 `;
 
   if (fileTree) {

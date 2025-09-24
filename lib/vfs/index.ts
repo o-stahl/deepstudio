@@ -13,6 +13,7 @@ import {
   PatchOperation 
 } from './types';
 import { saveManager } from './save-manager';
+import { VirtualServer } from '@/lib/preview/virtual-server';
 
 export class VirtualFileSystem {
   private db: VFSDatabase;
@@ -800,18 +801,51 @@ export class VirtualFileSystem {
   async exportProjectAsZip(projectId: string): Promise<Blob> {
     this.ensureInitialized();
     
-    // Get all files for the project
-    const files = await this.db.listFiles(projectId);
-    
     const zip = new JSZip();
     
-    for (const file of files) {
-      const zipPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+    try {
+      // Create VirtualServer instance and compile the project through Handlebars
+      const server = new VirtualServer(this, projectId);
+      const compiledProject = await server.compileProject();
       
-      if (typeof file.content === 'string') {
-        zip.file(zipPath, file.content);
-      } else {
-        zip.file(zipPath, file.content);
+      // Add compiled files to ZIP, filtering out template-related files
+      for (const file of compiledProject.files) {
+        const zipPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+        
+        // Skip template files, data files, and template directories
+        if (this.shouldExcludeFromExport(file.path)) {
+          continue;
+        }
+        
+        if (typeof file.content === 'string') {
+          zip.file(zipPath, file.content);
+        } else {
+          zip.file(zipPath, file.content);
+        }
+      }
+      
+      // Clean up VirtualServer resources
+      server.cleanupBlobUrls();
+      
+    } catch (error) {
+      logger.warn('Failed to compile Handlebars templates during export, falling back to raw files:', error);
+      
+      // Fallback to original behavior if Handlebars compilation fails
+      const files = await this.db.listFiles(projectId);
+      
+      for (const file of files) {
+        const zipPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+        
+        // Skip template files even in fallback mode
+        if (this.shouldExcludeFromExport(file.path)) {
+          continue;
+        }
+        
+        if (typeof file.content === 'string') {
+          zip.file(zipPath, file.content);
+        } else {
+          zip.file(zipPath, file.content);
+        }
       }
     }
     
@@ -824,6 +858,25 @@ export class VirtualFileSystem {
     });
     
     return blob;
+  }
+
+  private shouldExcludeFromExport(filePath: string): boolean {
+    // Exclude template files and related development files
+    if (filePath.endsWith('.hbs') || filePath.endsWith('.handlebars')) {
+      return true;
+    }
+    
+    // Exclude templates directory
+    if (filePath.startsWith('/templates/')) {
+      return true;
+    }
+    
+    // Exclude data.json file (since it's compiled into HTML)
+    if (filePath === '/data.json') {
+      return true;
+    }
+    
+    return false;
   }
 
   async duplicateProject(projectId: string): Promise<Project> {
