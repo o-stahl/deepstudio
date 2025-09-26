@@ -1688,9 +1688,13 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                 </div>
                 
                 {/* Messages */}
-                <div className="flex-1 overflow-auto p-2 space-y-2">
+                <div 
+                  ref={messagesContainerRef}
+                  onScroll={handleScroll}
+                  className="flex-1 overflow-auto p-2 space-y-2"
+                >
                   {messages.map((msg, i) => {
-                    if (msg.isTask) {
+                    if (msg.isTask && msg.taskSteps) {
                       return (
                         <div key={msg.id} className="border border-border rounded-lg p-3 bg-card">
                           <div className="flex items-center justify-between mb-2">
@@ -1707,6 +1711,34 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                                 Restore
                               </Button>
                             )}
+                          </div>
+                          <AssistantMessage
+                            content={msg.content}
+                            toolCalls={(msg as any).toolCalls}
+                            toolMessages={(msg as any).toolMessages}
+                            checkpointId={msg.checkpointId}
+                            onRestore={msg.checkpointId ? (id) => handleRestoreCheckpoint(id, 'checkpoint') : undefined}
+                            onRetry={msg.checkpointId ? (id) => handleRetry(id, i) : undefined}
+                            isSavedCheckpoint={msg.checkpointId === initialCheckpointId}
+                            isExecuting={generating}
+                            cost={(msg as any).cost}
+                            usage={(msg as any).usage}
+                          />
+                        </div>
+                      );
+                    }
+                    
+                    // Handle assistant messages with tool calls/messages (streaming support)
+                    if (
+                      msg.role === 'assistant' && (
+                        (msg as any).toolMessages && (msg as any).toolMessages.length > 0 ||
+                        (msg as any).toolCalls && (msg as any).toolCalls.length > 0
+                      )
+                    ) {
+                      return (
+                        <div key={msg.id} className="bg-card border border-border p-3 rounded-lg text-sm mr-2">
+                          <div className="mb-2">
+                            <p className="font-medium">AI</p>
                           </div>
                           <AssistantMessage
                             content={msg.content}

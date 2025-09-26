@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.2 - 2025-01-26
+- Fixed mobile streaming disconnection issue in workspace chat panel
+- Mobile now properly displays real-time AI responses with tool calls
+- Added missing scroll management for mobile chat during streaming
+- Aligned mobile and desktop chat rendering behavior
+
 ## v1.0.1 - 2025-01-24
 - Added Handlebars templating support (.hbs/.handlebars files)
 - Templates automatically compile to static HTML on export
