@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.5 - 2025-01-26
+- Fixed TypeScript compilation error with shell tool oneOf parameter support  
+- Enhanced Handlebars error handling with detection of invalid LLM-generated syntax
+- Added helpful error messages for common Handlebars pattern mistakes
+
 ## v1.0.4 - 2025-01-26
 - Improved LLM shell tool compatibility with natural command format support
 - Shell tool now accepts both string ("ls -la /") and array (["ls", "-la", "/"]) formats

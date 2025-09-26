@@ -291,6 +291,13 @@ export class VirtualServer {
     await this.registerPartials();
     
     try {
+      // Check for common invalid LLM-generated patterns before compilation
+      const invalidPatterns = this.detectInvalidHandlebarsPatterns(content);
+      if (invalidPatterns.length > 0) {
+        const errorMessages = invalidPatterns.map(pattern => `❌ ${pattern.error}\n💡 ${pattern.suggestion}`).join('\n\n');
+        return `<!-- Handlebars Syntax Error -->\n<div style="background: #fee; border: 1px solid #f99; padding: 1rem; margin: 1rem; border-radius: 4px; font-family: monospace;">\n<h3 style="color: #c33; margin: 0 0 1rem 0;">⚠️ Handlebars Template Error</h3>\n<pre style="margin: 0; white-space: pre-wrap;">${errorMessages}</pre>\n</div>\n<!-- Original content:\n${content}\n-->`;
+      }
+
       // Look for a data.json file for template context
       let context = {};
       try {
@@ -306,9 +313,44 @@ export class VirtualServer {
       return result;
     } catch (error) {
       console.error('VirtualServer: Error processing Handlebars templates:', error);
-      // Return original content if processing fails
-      return content;
+      
+      // Return a helpful error message instead of original content
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return `<!-- Handlebars Compilation Error -->\n<div style="background: #fee; border: 1px solid #f99; padding: 1rem; margin: 1rem; border-radius: 4px; font-family: monospace;">\n<h3 style="color: #c33; margin: 0 0 1rem 0;">⚠️ Handlebars Template Error</h3>\n<p><strong>Error:</strong> ${errorMessage}</p>\n<p><strong>Common fixes:</strong></p>\n<ul>\n<li>Check for typos in helper names and partial references</li>\n<li>Ensure all opening tags have matching closing tags</li>\n<li>Verify partial names exist in /templates/ directory</li>\n<li>Use <code>{{> partialName}}</code> syntax, not <code>(> partialName)</code></li>\n</ul>\n</div>\n<!-- Original content:\n${content}\n-->`;
     }
+  }
+
+  private detectInvalidHandlebarsPatterns(content: string): Array<{error: string, suggestion: string}> {
+    const patterns = [];
+    
+    // Pattern 1: Invalid (> partial) syntax in parameters
+    const invalidPartialInParam = /\w+\s*=\s*\(\s*>\s*[\w-]+\s*\)/g;
+    if (invalidPartialInParam.test(content)) {
+      patterns.push({
+        error: "Invalid syntax: Using (> partial) as parameter value",
+        suggestion: "Use string-based dynamic partials: content=\"partial-name\" then {{> (lookup this 'content')}}"
+      });
+    }
+    
+    // Pattern 2: Common typos in partial syntax
+    const typoPartialSyntax = /\{\{\s*>\s*\(\s*>\s*[\w-]+\s*\)\s*\}\}/g;
+    if (typoPartialSyntax.test(content)) {
+      patterns.push({
+        error: "Invalid syntax: Double partial reference {{> (> partial)}}",
+        suggestion: "Use {{> partialName}} for static partials or {{> (lookup data 'partialName')}} for dynamic"
+      });
+    }
+    
+    // Pattern 3: Missing quotes in parameter values
+    const unquotedParams = /\{\{\s*>\s*[\w-]+\s+\w+\s*=\s*[^"'\s}][^}\s]*(?:\s|}})/g;
+    if (unquotedParams.test(content)) {
+      patterns.push({
+        error: "Missing quotes in parameter values",
+        suggestion: "Wrap parameter values in quotes: title=\"My Title\" not title=My Title"
+      });
+    }
+    
+    return patterns;
   }
 
   private async processCSS(file: VirtualFile, blobUrls: Map<string, string>): Promise<ProcessedFile> {
