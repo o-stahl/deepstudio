@@ -14,7 +14,7 @@ export interface ProjectTemplate {
 export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
   name: 'Example Studios',
   description: 'Creative agency portfolio showcasing modern web development capabilities',
-  directories: ['/styles', '/scripts', '/portfolio', '/assets', '/assets/images'],
+  directories: ['/styles', '/scripts', '/portfolio', '/assets', '/assets/images', '/templates'],
   files: [
     {
       path: '/index.html',
@@ -28,25 +28,7 @@ export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
     <link rel="stylesheet" href="/styles/main.css">
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="nav-brand">
-            <img src="/assets/images/logo.svg" alt="Example Studios" class="nav-logo">
-            <span>Example Studios</span>
-        </a>
-        
-        <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-        </button>
-        
-        <ul class="nav-menu">
-            <li><a href="/" class="nav-link active">Home</a></li>
-            <li><a href="/portfolio.html" class="nav-link">Portfolio</a></li>
-            <li><a href="/about.html" class="nav-link">About</a></li>
-            <li><a href="/contact.html" class="nav-link">Contact</a></li>
-        </ul>
-    </nav>
+    {{> navigation}}
 
     <main>
         <section class="hero">
@@ -131,59 +113,7 @@ export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
         </div>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
 </body>
@@ -337,59 +267,7 @@ export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
         </section>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
     <script src="/scripts/portfolio.js"></script>
@@ -540,59 +418,7 @@ export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
         </div>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
 </body>
@@ -2274,6 +2100,81 @@ document.addEventListener('DOMContentLoaded', function() {
 });`
     },
     {
+      path: '/templates/navigation.hbs',
+      content: `<nav class="navbar">
+    <a href="/" class="nav-brand">
+        <img src="/assets/images/logo.svg" alt="{{siteName}}" class="nav-logo">
+        <span>{{siteName}}</span>
+    </a>
+    
+    <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+    </button>
+    
+    <ul class="nav-menu">
+        {{#each navigation}}
+        <li><a href="{{url}}" class="nav-link">{{title}}</a></li>
+        {{/each}}
+    </ul>
+</nav>`
+    },
+    {
+      path: '/templates/footer.hbs',
+      content: `<footer class="site-footer">
+    <div class="footer-content">
+        <div class="footer-brand">
+            <div class="footer-logo">
+                <img src="/assets/images/logo.svg" alt="{{siteName}}" width="40" height="40">
+                <span>{{siteName}}</span>
+            </div>
+            <p class="footer-tagline">{{footerTagline}}</p>
+            <div class="footer-social">
+                {{#each social}}
+                <a href="{{url}}" aria-label="{{name}}">{{icon}}</a>
+                {{/each}}
+            </div>
+        </div>
+        
+        <div class="footer-links-section">
+            <div class="footer-column">
+                <h4>Explore</h4>
+                <ul class="footer-links">
+                    {{#each navigation}}
+                    <li><a href="{{url}}">{{title}}</a></li>
+                    {{/each}}
+                </ul>
+            </div>
+            
+            <div class="footer-column">
+                <h4>Services</h4>
+                <ul class="footer-links">
+                    {{#each services}}
+                    <li><a href="{{url}}">{{name}}</a></li>
+                    {{/each}}
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer-bottom">
+        <a href="{{deepstudioLink}}" target="_blank" class="footer-hf-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>{{deepstudioName}}</span>
+        </a>
+        <div class="footer-bottom-links">
+            {{#each legalLinks}}
+            <a href="{{url}}">{{name}}</a>
+            {{#unless @last}}<span class="separator">•</span>{{/unless}}
+            {{/each}}
+        </div>
+    </div>
+</footer>`
+    },
+    {
       path: '/scripts/portfolio.js',
       content: `// Portfolio Filtering Functionality
 
@@ -2582,6 +2483,37 @@ document.addEventListener('DOMContentLoaded', function() {
 })();`
     },
     {
+      path: '/data.json',
+      content: `{
+  "siteName": "Example Studios",
+  "footerTagline": "Crafting digital experiences that inspire",
+  "navigation": [
+    {"title": "Home", "url": "/"},
+    {"title": "Portfolio", "url": "/portfolio.html"},
+    {"title": "About", "url": "/about.html"},
+    {"title": "Contact", "url": "/contact.html"}
+  ],
+  "social": [
+    {"name": "Twitter", "url": "#", "icon": "𝕏"},
+    {"name": "LinkedIn", "url": "#", "icon": "in"},
+    {"name": "Instagram", "url": "#", "icon": "📷"},
+    {"name": "GitHub", "url": "#", "icon": "⚡"}
+  ],
+  "services": [
+    {"name": "Web Design", "url": "/portfolio.html"},
+    {"name": "Development", "url": "/portfolio.html"},
+    {"name": "Mobile Apps", "url": "/portfolio.html"},
+    {"name": "Consulting", "url": "/portfolio.html"}
+  ],
+  "deepstudioLink": "https://huggingface.co/spaces/otst/deepstudio",
+  "deepstudioName": "DeepStudio",
+  "legalLinks": [
+    {"name": "Privacy Policy", "url": "/privacy.html"},
+    {"name": "Terms of Service", "url": "/terms.html"}
+  ]
+}`
+    },
+    {
       path: '/assets/images/logo.svg',
       content: `<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -2754,59 +2686,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </section>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
     <script src="/scripts/contact.js"></script>
@@ -2825,25 +2705,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <link rel="stylesheet" href="/styles/main.css">
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="nav-brand">
-            <img src="/assets/images/logo.svg" alt="Example Studios" class="nav-logo">
-            <span>Example Studios</span>
-        </a>
-        
-        <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-        </button>
-        
-        <ul class="nav-menu">
-            <li><a href="/" class="nav-link">Home</a></li>
-            <li><a href="/portfolio.html" class="nav-link">Portfolio</a></li>
-            <li><a href="/about.html" class="nav-link">About</a></li>
-            <li><a href="/contact.html" class="nav-link">Contact</a></li>
-        </ul>
-    </nav>
+    {{> navigation}}
 
     <main>
         <section class="hero sub-page">
@@ -2916,59 +2778,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </section>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
 </body>
@@ -2986,25 +2796,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <link rel="stylesheet" href="/styles/main.css">
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="nav-brand">
-            <img src="/assets/images/logo.svg" alt="Example Studios" class="nav-logo">
-            <span>Example Studios</span>
-        </a>
-        
-        <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-        </button>
-        
-        <ul class="nav-menu">
-            <li><a href="/" class="nav-link">Home</a></li>
-            <li><a href="/portfolio.html" class="nav-link">Portfolio</a></li>
-            <li><a href="/about.html" class="nav-link">About</a></li>
-            <li><a href="/contact.html" class="nav-link">Contact</a></li>
-        </ul>
-    </nav>
+    {{> navigation}}
 
     <main>
         <section class="hero sub-page">
@@ -3073,59 +2865,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
 </body>
@@ -3239,59 +2979,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </section>
     </main>
 
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="footer-brand">
-                <div class="footer-logo">
-                    <img src="/assets/images/logo.svg" alt="Example Studios" width="40" height="40">
-                    <span>Example Studios</span>
-                </div>
-                <p class="footer-tagline">Crafting digital experiences that inspire</p>
-                <div class="footer-social">
-                    <a href="#" aria-label="Twitter">𝕏</a>
-                    <a href="#" aria-label="LinkedIn">in</a>
-                    <a href="#" aria-label="Instagram">📷</a>
-                    <a href="#" aria-label="GitHub">⚡</a>
-                </div>
-            </div>
-            
-            <div class="footer-links-section">
-                <div class="footer-column">
-                    <h4>Explore</h4>
-                    <ul class="footer-links">
-                        <li><a href="/">Home</a></li>
-                        <li><a href="/portfolio.html">Portfolio</a></li>
-                        <li><a href="/about.html">About</a></li>
-                        <li><a href="/contact.html">Contact</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-column">
-                    <h4>Services</h4>
-                    <ul class="footer-links">
-                        <li><a href="/portfolio.html">Web Design</a></li>
-                        <li><a href="/portfolio.html">Development</a></li>
-                        <li><a href="/portfolio.html">Mobile Apps</a></li>
-                        <li><a href="/portfolio.html">Consulting</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <a href="https://huggingface.co/spaces/otst/deepstudio" target="_blank" class="footer-hf-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-                <span>DeepStudio</span>
-            </a>
-            <div class="footer-bottom-links">
-                <a href="/privacy.html">Privacy Policy</a>
-                <span class="separator">•</span>
-                <a href="/terms.html">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
+    {{> footer}}
 
     <script src="/scripts/main.js"></script>
 </body>
@@ -3329,7 +3017,7 @@ This demonstrates the VFS capability to handle multiple file types and organize 
 export const BAREBONES_PROJECT_TEMPLATE: ProjectTemplate = {
   name: 'Barebones Project',
   description: 'A minimal starting template',
-  directories: ['/styles', '/scripts'],
+  directories: ['/styles', '/scripts', '/templates'],
   files: [
     {
       path: '/index.html',
@@ -3342,8 +3030,7 @@ export const BAREBONES_PROJECT_TEMPLATE: ProjectTemplate = {
     <link rel="stylesheet" href="/styles/style.css">
 </head>
 <body>
-    <h1>Welcome</h1>
-    <p>Start building your website!</p>
+    {{> welcome-card}}
 
     <script src="/scripts/main.js"></script>
 </body>
@@ -3373,6 +3060,10 @@ p {
   font-size: 1rem;
   line-height: 1.6;
 }
+
+.welcome-card {
+  /* Component styles can be added here */
+}
 `
     },
     {
@@ -3384,6 +3075,20 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Project ready. Happy building!');
 });
 `
+    },
+    {
+      path: '/templates/welcome-card.hbs',
+      content: `<div class="welcome-card">
+    <h1>{{title}}</h1>
+    <p>{{message}}</p>
+</div>`
+    },
+    {
+      path: '/data.json',
+      content: `{
+  "title": "Welcome",
+  "message": "Start building your website!"
+}`
     }
   ]
 };

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.3 - 2025-01-26
+- Enhanced demo project with Handlebars templating for navigation and footer
+- Added minimal Handlebars component to barebones template
+- Improved template organization and maintainability
+
 ## v1.0.2 - 2025-01-26
 - Fixed mobile streaming disconnection issue in workspace chat panel
 - Mobile now properly displays real-time AI responses with tool calls
