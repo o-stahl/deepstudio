@@ -1,11 +1,12 @@
 export interface ToolParameter {
-  type: string;
-  description: string;
+  type?: string;
+  description?: string;
   enum?: string[];
   items?: {
     type: string;
     properties?: Record<string, ToolParameter>;
   };
+  oneOf?: ToolParameter[];
 }
 
 export interface ToolDefinition {
