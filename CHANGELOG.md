@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.4 - 2025-01-26
+- Improved LLM shell tool compatibility with natural command format support
+- Shell tool now accepts both string ("ls -la /") and array (["ls", "-la", "/"]) formats
+- Fixed system prompt confusion about model tool-calling capabilities
+- Added automatic string-to-array conversion for better first-call success rates
+
 ## v1.0.3 - 2025-01-26
 - Enhanced demo project with Handlebars templating for navigation and footer
 - Added minimal Handlebars component to barebones template

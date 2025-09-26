@@ -2,14 +2,22 @@ import { ToolDefinition } from './types';
 
 export const SHELL_TOOL_DEF: ToolDefinition = {
   name: 'shell',
-  description: 'Run a command in the sandboxed VFS terminal. Provide argv vector in cmd array.',
+  description: 'Run a command in the sandboxed VFS terminal. Use natural command format (string) or array format.',
   parameters: {
     type: 'object',
     properties: {
       cmd: {
-        type: 'array',
-        description: 'argv vector, e.g., ["cat","/index.html"]',
-        items: { type: 'string' }
+        oneOf: [
+          {
+            type: 'string',
+            description: 'Natural command format, e.g., "cat /index.html" or "ls -la /"'
+          },
+          {
+            type: 'array',
+            description: 'argv vector format, e.g., ["cat","/index.html"]',
+            items: { type: 'string' }
+          }
+        ]
       },
       cwd: { type: 'string', description: 'working directory (ignored; paths are absolute under /)' },
       timeoutMs: { type: 'number', description: 'command timeout (ms)' }

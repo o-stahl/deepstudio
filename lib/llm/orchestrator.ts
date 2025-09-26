@@ -23,6 +23,60 @@ import { fetchAvailableModels } from './models-api';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Parse a shell command string into an array of arguments
+ * Handles quoted arguments and basic shell escaping
+ */
+function parseShellCommand(cmdStr: string): string[] {
+  const args: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let quoteChar = '';
+  let escaped = false;
+
+  for (let i = 0; i < cmdStr.length; i++) {
+    const char = cmdStr[i];
+    
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    
+    if (inQuotes) {
+      if (char === quoteChar) {
+        inQuotes = false;
+        quoteChar = '';
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === '"' || char === "'") {
+        inQuotes = true;
+        quoteChar = char;
+      } else if (char === ' ' || char === '\t') {
+        if (current.length > 0) {
+          args.push(current);
+          current = '';
+        }
+      } else {
+        current += char;
+      }
+    }
+  }
+  
+  if (current.length > 0) {
+    args.push(current);
+  }
+  
+  return args;
+}
+
 export interface OrchestratorMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
@@ -1000,27 +1054,34 @@ The arguments must be valid JSON. Common issues:
 ✅ Correct: {"cmd": ["ls", "/"]}`);
           }
           
-          if (!args.cmd || !Array.isArray(args.cmd)) {
-            throw new Error(`Malformed tool call - cmd must be an array.
+          if (!args.cmd) {
+            throw new Error('cmd parameter is required');
+          }
+          
+          // Convert cmd to array format if it's a string
+          let cmdArray: string[];
+          if (typeof args.cmd === 'string') {
+            cmdArray = parseShellCommand(args.cmd);
+            logger.debug(`[Orchestrator] Converted string command "${args.cmd}" to array:`, cmdArray);
+          } else if (Array.isArray(args.cmd)) {
+            cmdArray = args.cmd;
+          } else {
+            throw new Error(`Malformed tool call - cmd must be string or array.
 
-❌ Wrong format: {"cmd": "[\"mkdir\", \"-p\", \"/pages\"]"}
-✅ Correct format: {"cmd": ["mkdir", "-p", "/pages"]}
-
-❌ Wrong: Using echo with redirection
-✅ Correct: Use json_patch to create files
+✅ Natural format: {"cmd": "ls -la /"}
+✅ Array format: {"cmd": ["ls", "-la", "/"]}
 
 Examples:
-- {"cmd": ["ls", "/"]} - List files
-- {"cmd": ["mkdir", "/dirname"]} - Create directory  
-- {"cmd": ["rm", "-rf", "/dirname"]} - Remove directory
-- {"cmd": ["cat", "/file.txt"]} - Read file
-- Use json_patch for file content, not shell redirection`);
+- {"cmd": "cat /index.html"} - Natural format
+- {"cmd": ["cat", "/index.html"]} - Array format
+- {"cmd": "ls -la /"} - Natural format  
+- {"cmd": ["ls", "-la", "/"]} - Array format`);
           }
           
           // Execute tool command
-          logger.debug(`[Orchestrator] Executing shell command: ${args.cmd[0]}`);
+          logger.debug(`[Orchestrator] Executing shell command: ${cmdArray[0]}`);
           logger.debug(`[Orchestrator] Routing to executeShellCommand`);
-          const result = await this.executeShellCommand(args.cmd);
+          const result = await this.executeShellCommand(cmdArray);
           logger.debug(`[Orchestrator] Command result length:`, result?.length);
           
           toolResults.push({

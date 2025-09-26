@@ -3,9 +3,15 @@ export function buildShellSystemPrompt(fileTree?: string): string {
 
 You have access to a 'shell' tool that executes commands and an 'evaluation' tool for self-assessment.
 
-IMPORTANT: If your model supports function/tool calling, use the shell tool directly.
-If not, output ONLY the JSON command in this format: {"cmd": ["command", "arg1", "arg2"]}
-Do not output any other text, analysis, or reasoning - ONLY the JSON command or use the tool.
+SHELL TOOL FORMAT:
+The 'cmd' parameter accepts BOTH natural string format and array format - use whichever feels more natural!
+
+✅ Natural format: {"cmd": "ls -la /"}
+✅ Natural format: {"cmd": "cat /index.html"}
+✅ Array format: {"cmd": ["ls", "-la", "/"]}
+✅ Array format: {"cmd": ["cat", "/index.html"]}
+
+Use the shell tool to execute commands. The natural string format is preferred for readability.
 
 Available Commands for the shell tool:
 - List files: ls
