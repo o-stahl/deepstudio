@@ -1,6 +1,6 @@
 # DeepStudio
 
-**Agentic Browser-based Website Builder** (v1.0.5)
+**Agentic Browser-based Website Builder**
 
 **Links**: [GitHub Repository](https://github.com/o-stahl/deepstudio) | [Live Demo](https://huggingface.co/spaces/otst/deepstudio) | [Changelog](./CHANGELOG.md)
 

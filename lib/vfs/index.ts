@@ -132,7 +132,7 @@ export class VirtualFileSystem {
     }
   }
 
-  async updateFile(projectId: string, path: string, content: string): Promise<VirtualFile> {
+  async updateFile(projectId: string, path: string, content: string | ArrayBuffer): Promise<VirtualFile> {
     this.ensureInitialized();
     
     try {
@@ -153,7 +153,7 @@ export class VirtualFileSystem {
       }
 
       file.content = content;
-      file.size = new Blob([content]).size;
+      file.size = content instanceof ArrayBuffer ? content.byteLength : new Blob([content]).size;
       file.updatedAt = new Date();
 
       await this.db.updateFile(file);

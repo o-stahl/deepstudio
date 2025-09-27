@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.6 - 2025-01-27
+- Fixed binary file persistence in checkpoint system
+- Images and other binary files now properly persist across page reloads
+- Added base64 encoding/decoding for binary content in checkpoints
+- Updated VFS updateFile to support ArrayBuffer content
+
 ## v1.0.5 - 2025-01-26
 - Fixed TypeScript compilation error with shell tool oneOf parameter support  
 - Enhanced Handlebars error handling with detection of invalid LLM-generated syntax

@@ -3,11 +3,17 @@ import { logger } from '@/lib/utils';
 
 export type CheckpointKind = 'auto' | 'manual' | 'system';
 
+// File content can be either a string or base64-encoded binary data
+interface CheckpointFileContent {
+  data: string;
+  encoding?: 'base64';
+}
+
 export interface Checkpoint {
   id: string;
   timestamp: string;
   description: string;
-  files: Map<string, string>;
+  files: Map<string, string | CheckpointFileContent>;
   directories: Set<string>;
   projectId: string;
   kind: CheckpointKind;
@@ -19,7 +25,7 @@ interface StoredCheckpoint {
   id: string;
   timestamp: string;
   description: string;
-  files: [string, string][];
+  files: [string, string | CheckpointFileContent][];
   directories: string[];
   projectId: string;
   kind?: CheckpointKind;
@@ -39,6 +45,30 @@ export class CheckpointManager {
   private storeName = 'checkpoints';
   private db: IDBDatabase | null = null;
   private isInitialized = false;
+
+  /**
+   * Convert ArrayBuffer to base64 string
+   */
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * Convert base64 string to ArrayBuffer
+   */
+  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
   
   /**
    * Initialize the IndexedDB database
@@ -167,7 +197,7 @@ export class CheckpointManager {
     await vfs.init();
     
     const files = await vfs.listDirectory(projectId, '/');
-    const fileContents = new Map<string, string>();
+    const fileContents = new Map<string, string | CheckpointFileContent>();
     const directories = new Set<string>();
     
     for (const file of files) {
@@ -179,11 +209,25 @@ export class CheckpointManager {
       
       if (typeof file.content === 'string') {
         fileContents.set(file.path, file.content);
+      } else if (file.content instanceof ArrayBuffer) {
+        // Convert ArrayBuffer to base64 for storage
+        const base64Data = this.arrayBufferToBase64(file.content);
+        fileContents.set(file.path, {
+          data: base64Data,
+          encoding: 'base64'
+        });
       } else {
+        // Try to read the full file if content is not available
         try {
           const fullFile = await vfs.readFile(projectId, file.path);
           if (typeof fullFile.content === 'string') {
             fileContents.set(file.path, fullFile.content);
+          } else if (fullFile.content instanceof ArrayBuffer) {
+            const base64Data = this.arrayBufferToBase64(fullFile.content);
+            fileContents.set(file.path, {
+              data: base64Data,
+              encoding: 'base64'
+            });
           }
         } catch (error) {
           logger.error(`Failed to read file for checkpoint: ${file.path}`, error);
@@ -233,7 +277,6 @@ export class CheckpointManager {
       for (const cp of toDelete) {
         this.checkpoints.delete(cp.id);
         await this.deleteCheckpointFromDB(cp.id);
-        logger.debug(`[Checkpoint] Deleted old checkpoint: ${cp.id}`);
       }
     }
 
@@ -261,14 +304,12 @@ export class CheckpointManager {
     let checkpoint = this.checkpoints.get(checkpointId);
     if (!checkpoint) {
       // Try to load from IndexedDB if not in memory
-      logger.debug(`[Checkpoint] Checkpoint ${checkpointId} not in memory, checking database...`);
       await this.loadCheckpointsFromDB();
       checkpoint = this.checkpoints.get(checkpointId);
       if (!checkpoint) {
         logger.error(`[Checkpoint] Checkpoint not found in database: ${checkpointId}`);
         // List available checkpoints for debugging
         const available = Array.from(this.checkpoints.keys());
-        logger.debug(`[Checkpoint] Available checkpoints:`, available);
         return false;
       }
     }
@@ -319,11 +360,20 @@ export class CheckpointManager {
       }
       
       for (const [path, content] of checkpoint.files) {
+        let actualContent: string | ArrayBuffer;
+        
+        // Check if content is base64-encoded binary data
+        if (typeof content === 'object' && content.encoding === 'base64') {
+          actualContent = this.base64ToArrayBuffer(content.data);
+        } else {
+          actualContent = content as string;
+        }
+        
         const exists = currentFiles.some(f => f.path === path);
         if (exists) {
-          await vfs.updateFile(checkpoint.projectId, path, content);
+          await vfs.updateFile(checkpoint.projectId, path, actualContent);
         } else {
-          await vfs.createFile(checkpoint.projectId, path, content);
+          await vfs.createFile(checkpoint.projectId, path, actualContent);
         }
       }
       
