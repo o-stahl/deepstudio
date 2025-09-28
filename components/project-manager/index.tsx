@@ -39,7 +39,7 @@ import {
   BAREBONES_PROJECT_TEMPLATE,
   createProjectFromTemplate,
   createDemoProjectWithAssets
-} from '@/lib/vfs/simple-templates';
+} from '@/lib/vfs/project-templates';
 import {
   Select,
   SelectContent,

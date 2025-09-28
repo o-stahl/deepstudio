@@ -341,8 +341,8 @@ export class VirtualServer {
       });
     }
     
-    // Pattern 3: Missing quotes in parameter values
-    const unquotedParams = /\{\{\s*>\s*[\w-]+\s+\w+\s*=\s*[^"'\s}][^}\s]*(?:\s|}})/g;
+    // Pattern 3: Missing quotes in parameter values (literal strings with spaces)
+    const unquotedParams = /\{\{\s*>\s*[\w-]+\s+\w+\s*=\s*[^"'\s}][^}]*\s[^}]*(?:\s|}})/g;
     if (unquotedParams.test(content)) {
       patterns.push({
         error: "Missing quotes in parameter values",

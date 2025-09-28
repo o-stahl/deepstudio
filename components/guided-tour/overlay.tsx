@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useGuidedTour } from './context';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { GUIDED_TOUR_STEPS } from './steps';
 
 interface GuidedTourOverlayProps {
   location: 'global' | 'project-manager' | 'workspace' | 'settings';
@@ -18,8 +19,11 @@ interface HighlightRect {
 
 export function GuidedTourOverlay({ location }: GuidedTourOverlayProps) {
   const { state, next, previous, skip } = useGuidedTour();
-  const { status, currentStep, stepKey, isBusy } = state;
+  const { status, currentStep, stepKey, isBusy, stepIndex } = state;
   const [rect, setRect] = useState<HighlightRect | null>(null);
+  
+  const totalSteps = GUIDED_TOUR_STEPS.length;
+  const currentStepNumber = stepIndex + 1;
 
   useEffect(() => {
     if (status !== 'running') return;
@@ -95,7 +99,7 @@ export function GuidedTourOverlay({ location }: GuidedTourOverlayProps) {
       <div className="absolute inset-0 bg-background/30" />
       {rect && (
         <div
-          className="pointer-events-none fixed rounded-xl border-2 border-primary ring-4 ring-primary/30 transition-all"
+          className="pointer-events-none fixed rounded-xl border-2 border-primary ring-4 ring-primary/30 transition-all animate-ring-opacity"
           style={{
             top: rect.top,
             left: rect.left,
@@ -108,8 +112,11 @@ export function GuidedTourOverlay({ location }: GuidedTourOverlayProps) {
       <div className="absolute bottom-10 left-1/2 flex w-full max-w-xl -translate-x-1/2 flex-col gap-4 px-4">
         <div className="pointer-events-auto rounded-2xl border bg-background/95 p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">{currentStep.title}</h3>
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-lg font-semibold text-foreground">{currentStep.title}</h3>
+                <span className="text-sm text-muted-foreground font-medium">{currentStepNumber}/{totalSteps}</span>
+              </div>
               <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 {currentStep.body}
               </div>

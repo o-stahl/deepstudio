@@ -190,3 +190,30 @@
 .matched-line {
   @apply bg-sky-500/30;
 }
+
+/* Animated ring effect for guided tour and focus targets */
+@keyframes pulse-opacity {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-ring-opacity {
+  position: relative;
+}
+
+.animate-ring-opacity::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 4px oklch(0.70 0.22 40);
+  animation: pulse-opacity 2s ease-in-out infinite;
+}

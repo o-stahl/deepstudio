@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.7 - 2025-01-27
+- Modularized the monolithic template file
+- Removed Handlebars template
+- Added step counter to guided tour overlay
+
 ## v1.0.6 - 2025-01-27
 - Fixed binary file persistence in checkpoint system
 - Images and other binary files now properly persist across page reloads
