@@ -130,11 +130,12 @@ export class VirtualServer {
     const newBlobUrls = new Map<string, string>();
     const rawProcessedFiles: ProcessedFile[] = [];
     
+    // First pass: Create blob URLs for all non-HTML files (images, JS, etc.)
     for (const file of files) {
       let processedFile: ProcessedFile;
       
-      // Skip template files - they're used as partials
-      if (file.type === 'template') {
+      // Skip template files and HTML files in first pass
+      if (file.type === 'template' || file.type === 'html' || file.type === 'css') {
         continue;
       }
       
@@ -144,19 +145,42 @@ export class VirtualServer {
           content: file.content,
           mimeType: file.mimeType
         };
-      } else if (file.type === 'html') {
-        processedFile = await this.processHTML(file);
       } else if (file.type === 'js') {
         processedFile = await this.processJS(file);
-      } else if (file.type !== 'css') {
+      } else {
         processedFile = {
           path: file.path,
           content: file.content as string,
           mimeType: file.mimeType
         };
+      }
+      
+      const contentHash = this.hashContent(processedFile.content);
+      const previousHash = this.fileHashes.get(processedFile.path);
+      
+      if (incrementalUpdate && previousHash === contentHash && oldBlobUrls.has(processedFile.path)) {
+        const existingUrl = oldBlobUrls.get(processedFile.path)!;
+        newBlobUrls.set(processedFile.path, existingUrl);
+        processedFile.blobUrl = existingUrl;
+        oldBlobUrls.delete(processedFile.path);
       } else {
+        const blob = new Blob([processedFile.content], { type: processedFile.mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+        newBlobUrls.set(processedFile.path, blobUrl);
+        processedFile.blobUrl = blobUrl;
+        this.fileHashes.set(processedFile.path, contentHash);
+      }
+      
+      rawProcessedFiles.push(processedFile);
+    }
+    
+    // Second pass: Process HTML files with available blob URLs
+    for (const file of files) {
+      if (file.type !== 'html') {
         continue;
       }
+      
+      const processedFile = await this.processHTML(file, newBlobUrls);
       
       const contentHash = this.hashContent(processedFile.content);
       const previousHash = this.fileHashes.get(processedFile.path);
@@ -270,14 +294,219 @@ export class VirtualServer {
     return processed;
   }
 
-  private async processHTML(file: VirtualFile): Promise<ProcessedFile> {
+  private async processHTML(file: VirtualFile, blobUrls?: Map<string, string>): Promise<ProcessedFile> {
     let content = file.content as string;
 
     // Process Handlebars templates first
     content = await this.processHandlebarsTemplates(content);
     
-    // Then process internal references
-    content = await this.processInternalReferences(content);
+    // Then process internal references with available blob URLs
+    content = await this.processInternalReferences(content, blobUrls);
+    
+    // Inject VFS asset interceptor for transparent HTTP requests
+    // Always inject the interceptor, even if no blob URLs yet (for future dynamic loading)
+    const blobUrlMap = blobUrls ? Object.fromEntries(blobUrls) : {};
+    const vfsScript = `<script>
+// VFS Asset Interceptor - Auto-injected by DeepStudio
+(function() {
+  const vfsBlobUrls = ${JSON.stringify(blobUrlMap)};
+  
+  // Helper function to resolve VFS paths to blob URLs
+  function resolveVfsUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('/assets/') && vfsBlobUrls[url]) {
+      return vfsBlobUrls[url];
+    }
+    return url;
+  }
+  
+  // Intercept Image src setter to handle ALL image loading
+  const originalSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+  Object.defineProperty(HTMLImageElement.prototype, 'src', {
+    get: function() {
+      return originalSrcDescriptor.get.call(this);
+    },
+    set: function(value) {
+      const resolvedUrl = resolveVfsUrl(value);
+      return originalSrcDescriptor.set.call(this, resolvedUrl);
+    },
+    enumerable: true,
+    configurable: true
+  });
+  
+  // Intercept setAttribute for src attributes
+  const originalSetAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function(name, value) {
+    if ((name === 'src' || name === 'href') && this instanceof HTMLImageElement) {
+      value = resolveVfsUrl(value);
+    }
+    return originalSetAttribute.call(this, name, value);
+  };
+  
+  // Intercept innerHTML to catch template-generated images
+  const originalInnerHTMLDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  Object.defineProperty(Element.prototype, 'innerHTML', {
+    get: function() {
+      return originalInnerHTMLDescriptor.get.call(this);
+    },
+    set: function(value) {
+      if (typeof value === 'string' && value.includes('/assets/')) {
+        // Replace asset URLs in the HTML string before setting
+        const srcRegex = new RegExp('src=["\\']([^"\\']*/assets/[^"\\']*)["\\']', 'g');
+        value = value.replace(srcRegex, function(match, url) {
+          const resolvedUrl = resolveVfsUrl(url);
+          if (resolvedUrl !== url) {
+            return match.replace(url, resolvedUrl);
+          }
+          return match;
+        });
+      }
+      return originalInnerHTMLDescriptor.set.call(this, value);
+    },
+    enumerable: true,
+    configurable: true
+  });
+  
+  // Intercept Image constructor
+  const OriginalImage = window.Image;
+  window.Image = function(...args) {
+    const img = new OriginalImage(...args);
+    // Override src setter for this instance too
+    const descriptor = Object.getOwnPropertyDescriptor(img, 'src') || 
+                      Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    if (descriptor) {
+      Object.defineProperty(img, 'src', {
+        get: descriptor.get,
+        set: function(value) {
+          const resolvedUrl = resolveVfsUrl(value);
+          return originalSrcDescriptor.set.call(this, resolvedUrl);
+        },
+        enumerable: true,
+        configurable: true
+      });
+    }
+    return img;
+  };
+  // Preserve original Image properties
+  Object.setPrototypeOf(window.Image, OriginalImage);
+  window.Image.prototype = OriginalImage.prototype;
+  
+  // Intercept createElement for img elements
+  const originalCreateElement = document.createElement;
+  document.createElement = function(tagName, options) {
+    const element = originalCreateElement.call(this, tagName, options);
+    if (tagName.toLowerCase() === 'img') {
+      const originalSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+      Object.defineProperty(element, 'src', {
+        get: function() {
+          return originalSrcDescriptor.get.call(this);
+        },
+        set: function(value) {
+          const resolvedUrl = resolveVfsUrl(value);
+          return originalSrcDescriptor.set.call(this, resolvedUrl);
+        },
+        enumerable: true,
+        configurable: true
+      });
+    }
+    return element;
+  };
+  
+  // Intercept fetch requests to VFS assets
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    const url = typeof input === 'string' ? input : input.url;
+    const resolvedUrl = resolveVfsUrl(url);
+    
+    if (resolvedUrl !== url) {
+      return originalFetch(resolvedUrl, init);
+    }
+    
+    return originalFetch(input, init);
+  };
+  
+  // Intercept XMLHttpRequest for older code
+  const OriginalXHR = window.XMLHttpRequest;
+  window.XMLHttpRequest = function() {
+    const xhr = new OriginalXHR();
+    const originalOpen = xhr.open;
+    
+    xhr.open = function(method, url, ...args) {
+      const resolvedUrl = resolveVfsUrl(url);
+      return originalOpen.call(this, method, resolvedUrl, ...args);
+    };
+    
+    return xhr;
+  };
+  
+  // Process any existing images in the DOM when ready
+  function processExistingImages() {
+    const images = document.querySelectorAll('img[src*="/assets/"]');
+    images.forEach(img => {
+      const currentSrc = img.src;
+      const resolvedSrc = resolveVfsUrl(currentSrc);
+      if (resolvedSrc !== currentSrc) {
+        img.src = resolvedSrc;
+      }
+    });
+  }
+  
+  // Use MutationObserver to catch dynamically added images
+  function setupMutationObserver() {
+    if (typeof MutationObserver !== 'undefined') {
+      const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          mutation.addedNodes.forEach(function(node) {
+            if (node.nodeType === 1) { // Element node
+              if (node.tagName === 'IMG' && node.src && node.src.includes('/assets/')) {
+                const resolvedSrc = resolveVfsUrl(node.src);
+                if (resolvedSrc !== node.src) {
+                  node.src = resolvedSrc;
+                }
+              }
+              // Also check children
+              const childImages = node.querySelectorAll && node.querySelectorAll('img[src*="/assets/"]');
+              if (childImages) {
+                childImages.forEach(img => {
+                  const resolvedSrc = resolveVfsUrl(img.src);
+                  if (resolvedSrc !== img.src) {
+                    img.src = resolvedSrc;
+                  }
+                });
+              }
+            }
+          });
+        });
+      });
+      
+      observer.observe(document.body || document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+    }
+  }
+  
+  // Setup everything when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      processExistingImages();
+      setupMutationObserver();
+    });
+  } else {
+    processExistingImages();
+    setupMutationObserver();
+  }
+})();
+</script>`;
+      
+    // Insert in head for early execution
+    if (content.includes('</head>')) {
+      content = content.replace('</head>', vfsScript + '\n</head>');
+    } else if (content.includes('<body>')) {
+      content = content.replace('<body>', vfsScript + '\n<body>');
+    } else {
+      content = vfsScript + '\n' + content;
+    }
 
     return {
       path: file.path,
@@ -368,7 +597,6 @@ export class VirtualServer {
   private async processJS(file: VirtualFile): Promise<ProcessedFile> {
     const content = file.content as string;
 
-
     return {
       path: file.path,
       content,
@@ -376,8 +604,11 @@ export class VirtualServer {
     };
   }
 
-  private async processInternalReferences(content: string): Promise<string> {
+  private async processInternalReferences(content: string, blobUrls?: Map<string, string>): Promise<string> {
     const files = await this.vfs.listDirectory(this.projectId, '/');
+    
+    // Use provided blob URLs or fall back to instance blob URLs
+    const urlMap = blobUrls || this.blobUrls;
     
     const patterns = [
       /href="([^"]+)"/g,
@@ -389,7 +620,7 @@ export class VirtualServer {
     let processed = content;
     for (const pattern of patterns) {
       processed = processed.replace(pattern, (match, url) => {
-        if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('//')) {
+        if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('//') || url.startsWith('blob:')) {
           return match;
         }
 
@@ -397,7 +628,12 @@ export class VirtualServer {
         
         const fileExists = files.some(f => f.path === normalizedPath);
         if (fileExists) {
-          return match;
+          // Check if we have a blob URL for this file
+          const blobUrl = urlMap.get(normalizedPath);
+          if (blobUrl) {
+            // Replace the URL with the blob URL
+            return match.replace(url, blobUrl);
+          }
         }
 
         return match;
@@ -480,7 +716,7 @@ export class VirtualServer {
       const file = await this.vfs.readFile(this.projectId, path);
       
       if (file.type === 'html') {
-        return await this.processHTML(file);
+        return await this.processHTML(file, this.blobUrls);
       } else if (file.type === 'css') {
         return await this.processCSS(file, new Map());
       } else if (file.type === 'js') {

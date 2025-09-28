@@ -74,8 +74,8 @@ export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
                 <div class="work-item">
                     <img src="https://picsum.photos/400/300?random=2" alt="Project 2" class="work-image">
                     <div class="work-info">
-                        <h3>E-commerce Platform</h3>
-                        <p>Custom shopping experience with seamless checkout</p>
+                        <h3>Portfolio Website</h3>
+                        <p>Clean and modern portfolio showcase</p>
                     </div>
                 </div>
                 <div class="work-item">
@@ -206,14 +206,14 @@ export const DEMO_PROJECT_TEMPLATE: ProjectTemplate = {
             </div>
             
             <div class="portfolio-item" data-category="web">
-                <img src="https://picsum.photos/400/300?random=13" alt="E-commerce Platform" class="portfolio-image">
+                <img src="https://picsum.photos/400/300?random=13" alt="Web Application" class="portfolio-image">
                 <div class="portfolio-overlay">
-                    <h3>E-commerce Platform</h3>
-                    <p>Full-stack online store with advanced search and filtering</p>
+                    <h3>Web Application</h3>
+                    <p>Interactive web application with modern features</p>
                     <div class="portfolio-tags">
-                        <span class="tag">Next.js</span>
-                        <span class="tag">Stripe</span>
-                        <span class="tag">MongoDB</span>
+                        <span class="tag">React</span>
+                        <span class="tag">Node.js</span>
+                        <span class="tag">PostgreSQL</span>
                     </div>
                 </div>
             </div>
@@ -2810,7 +2810,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <ul>
                     <li>Provide accurate and complete information for your project</li>
                     <li>Respond to requests for feedback in a timely manner</li>
-                    <li>Make payments according to agreed schedules</li>
+                    <li>Collaborate effectively throughout the project</li>
                     <li>Respect intellectual property rights</li>
                 </ul>
                 
@@ -2824,21 +2824,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     <li><strong>Launch:</strong> Final delivery and launch support</li>
                 </ul>
                 
-                <h2>Payment Terms</h2>
+                <h2>Project Timeline</h2>
                 <ul>
-                    <li>Payment schedules will be outlined in individual project agreements</li>
-                    <li>Late payments may incur additional fees</li>
-                    <li>Refunds are handled on a case-by-case basis</li>
+                    <li>Project schedules will be outlined in individual agreements</li>
+                    <li>Milestone deliverables will be clearly defined</li>
+                    <li>Regular progress updates will be provided</li>
                 </ul>
                 
                 <h2>Intellectual Property</h2>
-                <p>Upon full payment, clients receive ownership of custom work created specifically for their project, excluding any pre-existing intellectual property or third-party components.</p>
+                <p>Upon project completion, clients receive ownership of custom work created specifically for their project, excluding any pre-existing intellectual property or third-party components.</p>
                 
                 <h2>Limitation of Liability</h2>
                 <p>Example Studios' liability is limited to the amount paid for services. We are not responsible for indirect, incidental, or consequential damages.</p>
                 
                 <h2>Termination</h2>
-                <p>Either party may terminate services with written notice. Clients are responsible for payment of completed work.</p>
+                <p>Either party may terminate services with written notice. All completed work will be delivered upon termination.</p>
                 
                 <h2>Changes to Terms</h2>
                 <p>We reserve the right to update these terms with reasonable notice to existing clients.</p>
@@ -3000,5 +3000,8 @@ The VFS system supports various file types:
 
 This demonstrates the VFS capability to handle multiple file types and organize them in a structured directory system.`
     }
+  ],
+  assets: [
+    { filename: 'example-background.jpg', path: '/assets/images/example-background.jpg' }
   ]
 };

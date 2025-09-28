@@ -3,7 +3,7 @@
  * Manages LLM communication, tool execution, checkpointing, and cost tracking
  */
 
-import { vfs, VirtualFileSystem } from '@/lib/vfs';
+import { vfs, VirtualFileSystem, VirtualFile } from '@/lib/vfs';
 import { checkpointManager, Checkpoint } from '@/lib/vfs/checkpoint';
 import { saveManager } from '@/lib/vfs/save-manager';
 import { configManager } from '@/lib/config/storage';
@@ -783,7 +783,7 @@ export class Orchestrator {
       try {
         const files = await vfs.listDirectory(this.projectId, '/');
         if (files.length > 0) {
-          fileTree = files.map(f => f.path).join('\n');
+          fileTree = this.buildFileTree(files);
         }
       } catch {
         // Ignore errors getting file tree
@@ -1363,6 +1363,102 @@ ${output}`;
     }
   }
   
+  /**
+   * Build a tree structure from files with sizes
+   */
+  private buildFileTree(files: VirtualFile[]): string {
+    if (files.length === 0) return '';
+
+    // Build directory structure
+    const tree = new Map<string, {
+      isDirectory: boolean;
+      size?: number;
+      children: Set<string>;
+    }>();
+
+    // Add all directories and files to the tree
+    for (const file of files) {
+      const pathParts = file.path.split('/').filter(Boolean);
+      
+      // Add intermediate directories
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const dirPath = '/' + pathParts.slice(0, i + 1).join('/');
+        if (!tree.has(dirPath)) {
+          tree.set(dirPath, { isDirectory: true, children: new Set() });
+        }
+      }
+      
+      // Add file
+      tree.set(file.path, { 
+        isDirectory: false, 
+        size: file.size,
+        children: new Set() 
+      });
+
+      // Link child to parent
+      const parentPath = '/' + pathParts.slice(0, -1).join('/');
+      if (parentPath !== '/' && tree.has(parentPath)) {
+        tree.get(parentPath)!.children.add(file.path);
+      } else if (parentPath === '/') {
+        // Root level items
+        if (!tree.has('/')) {
+          tree.set('/', { isDirectory: true, children: new Set() });
+        }
+        tree.get('/')!.children.add(file.path);
+      }
+    }
+
+    // Helper function to format file size
+    const formatSize = (bytes: number): string => {
+      if (bytes === 0) return '0B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      const size = (bytes / Math.pow(k, i));
+      
+      // Format to 1 decimal place for KB/MB, no decimal for bytes
+      const formatted = i === 0 ? size.toString() : size.toFixed(1);
+      return formatted + sizes[i];
+    };
+
+    // Recursive function to build tree string
+    const buildTreeString = (path: string, prefix: string = '', isLast: boolean = true): string[] => {
+      const entry = tree.get(path);
+      if (!entry) return [];
+
+      const lines: string[] = [];
+      const name = path === '/' ? '' : path.split('/').pop() || '';
+      
+      if (path !== '/') {
+        const connector = isLast ? '└── ' : '├── ';
+        const displayName = entry.isDirectory ? name + '/' : name;
+        const sizeInfo = entry.isDirectory ? '' : ` (${formatSize(entry.size || 0)})`;
+        lines.push(prefix + connector + displayName + sizeInfo);
+      }
+
+      // Sort children: directories first, then files, alphabetically
+      const children = Array.from(entry.children).sort((a, b) => {
+        const aEntry = tree.get(a);
+        const bEntry = tree.get(b);
+        if (aEntry?.isDirectory !== bEntry?.isDirectory) {
+          return aEntry?.isDirectory ? -1 : 1;
+        }
+        return a.localeCompare(b);
+      });
+
+      children.forEach((childPath, index) => {
+        const isLastChild = index === children.length - 1;
+        const childPrefix = path === '/' ? '' : prefix + (isLast ? '    ' : '│   ');
+        lines.push(...buildTreeString(childPath, childPrefix, isLastChild));
+      });
+
+      return lines;
+    };
+
+    const treeLines = buildTreeString('/');
+    return treeLines.length > 0 ? 'Project Structure:\n' + treeLines.join('\n') : '';
+  }
+
   /**
    * Generate a summary of the execution
    */

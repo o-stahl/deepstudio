@@ -6,10 +6,10 @@ You have access to a 'shell' tool that executes commands and an 'evaluation' too
 SHELL TOOL FORMAT:
 The 'cmd' parameter accepts BOTH natural string format and array format - use whichever feels more natural!
 
-✅ Natural format: {"cmd": "ls -la /"}
-✅ Natural format: {"cmd": "cat /index.html"}
-✅ Array format: {"cmd": ["ls", "-la", "/"]}
-✅ Array format: {"cmd": ["cat", "/index.html"]}
+Natural format: {"cmd": "ls -la /"}
+Natural format: {"cmd": "cat /index.html"}
+Array format: {"cmd": ["ls", "-la", "/"]}
+Array format: {"cmd": ["cat", "/index.html"]}
 
 Use the shell tool to execute commands. The natural string format is preferred for readability.
 
@@ -284,7 +284,7 @@ Available Handlebars Features:
 `;
 
   if (fileTree) {
-    prompt += `\n\nCurrent project structure:\n${fileTree}`;
+    prompt += `\n\n${fileTree}`;
   }
   return prompt;
 }

@@ -37,8 +37,9 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { 
   BAREBONES_PROJECT_TEMPLATE,
+  DEMO_PROJECT_TEMPLATE,
   createProjectFromTemplate,
-  createDemoProjectWithAssets
+  type AssetConfig
 } from '@/lib/vfs/project-templates';
 import {
   Select,
@@ -142,7 +143,7 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         'Multi-File Demo',
         'Interactive examples showing how HTML, CSS, and JavaScript files work together'
       );
-      await createDemoProjectWithAssets(vfs, demoProject.id);
+      await createProjectFromTemplate(vfs, demoProject.id, DEMO_PROJECT_TEMPLATE, DEMO_PROJECT_TEMPLATE.assets);
       toast.success('Demo project created successfully');
       await reloadProjects();
       onProjectSelect(demoProject);
@@ -222,7 +223,7 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
       );
 
       if (newProjectTemplate === 'demo') {
-        await createDemoProjectWithAssets(vfs, project.id);
+        await createProjectFromTemplate(vfs, project.id, DEMO_PROJECT_TEMPLATE, DEMO_PROJECT_TEMPLATE.assets);
       } else {
         await createProjectFromTemplate(vfs, project.id, BAREBONES_PROJECT_TEMPLATE);
       }

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.8 - 2025-01-28
+- Enhanced system prompt with directory tree structure and file sizes
+- Major VFS improvements: Added comprehensive image loading interceptor for dynamic content
+- VFS now transparently handles JavaScript-generated images and assets via blob URLs
+- Fixed image resolution issues in templates with automatic innerHTML processing
+- Refactored template system with self-contained asset definitions
+- Unified createProjectFromTemplate function with optional assets parameter
+
 ## v1.0.7 - 2025-01-27
 - Modularized the monolithic template file
 - Removed Handlebars template

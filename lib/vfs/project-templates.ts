@@ -1,4 +1,5 @@
-import { saveManager } from './save-manager';
+
+import { type AssetConfig } from './templates/utils';
 
 export interface ProjectTemplate {
   name: string;
@@ -9,6 +10,7 @@ export interface ProjectTemplate {
     isBase64?: boolean; // For binary files encoded as base64
   }>;
   directories: string[];
+  assets?: AssetConfig[];
 }
 
 // Re-export all templates and utilities from the modular structure
@@ -16,5 +18,5 @@ export {
   DEMO_PROJECT_TEMPLATE,
   BAREBONES_PROJECT_TEMPLATE,
   createProjectFromTemplate,
-  createDemoProjectWithAssets
+  type AssetConfig
 } from './templates';
