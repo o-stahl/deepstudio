@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.9.1 - 2025-01-30
+- Fixed Handlebars navigation links being converted to blob URLs instead of remaining as routes
+
 ## v1.9.0 - 2025-01-29
 - Added complete data backup and restore functionality
 - Export all projects, conversations, and checkpoints to .dstudio file

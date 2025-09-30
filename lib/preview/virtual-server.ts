@@ -604,6 +604,23 @@ export class VirtualServer {
     };
   }
 
+  private isAssetReference(url: string): boolean {
+    // Asset extensions that should be converted to blob URLs
+    const assetExtensions = [
+      '.css', '.js', '.jsx', '.ts', '.tsx',
+      '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
+      '.woff', '.woff2', '.ttf', '.otf', '.eot',
+      '.mp4', '.webm', '.ogg', '.mp3', '.wav',
+      '.pdf', '.zip', '.json', '.xml'
+    ];
+    
+    // Extract extension from URL (handle query params and fragments)
+    const cleanUrl = url.split('?')[0].split('#')[0];
+    const extension = cleanUrl.substring(cleanUrl.lastIndexOf('.')).toLowerCase();
+    
+    return assetExtensions.includes(extension);
+  }
+
   private async processInternalReferences(content: string, blobUrls?: Map<string, string>): Promise<string> {
     const files = await this.vfs.listDirectory(this.projectId, '/');
     
@@ -620,8 +637,15 @@ export class VirtualServer {
     let processed = content;
     for (const pattern of patterns) {
       processed = processed.replace(pattern, (match, url) => {
-        if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('//') || url.startsWith('blob:')) {
+        if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('//') || url.startsWith('blob:') || url.startsWith('#')) {
           return match;
+        }
+
+        // For href attributes, only convert asset references to blob URLs
+        // Leave navigation links (HTML pages and routes) as-is for proper routing
+        const isHref = match.includes('href=');
+        if (isHref && !this.isAssetReference(url)) {
+          return match; // Keep navigation links unchanged
         }
 
         const normalizedPath = this.normalizePath(url);
