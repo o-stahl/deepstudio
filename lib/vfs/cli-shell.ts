@@ -95,6 +95,52 @@ async function vfsShellExecute(
           return { stdout: truncate(res), stderr: '', exitCode: 0 };
         }
       }
+      case 'tree': {
+        // tree [path] [-L depth]
+        let maxDepth = Infinity;
+        let targetPath = '/';
+
+        for (let i = 0; i < args.length; i++) {
+          const a = args[i];
+          if (a === '-L' && args[i + 1]) {
+            maxDepth = parseInt(args[++i]) || Infinity;
+          } else if (!a.startsWith('-')) {
+            targetPath = a;
+          }
+        }
+
+        const path = normalizePath(targetPath) || '/';
+        const entries = await vfs.getAllFilesAndDirectories(projectId);
+        const prefix = path === '/' ? '/' : (path.endsWith('/') ? path : path + '/');
+
+        // Filter entries under the target path
+        const relevantEntries = entries
+          .filter((e: any) => e.path === path || e.path.startsWith(prefix))
+          .map((e: any) => ({
+            path: e.path,
+            isDir: 'type' in e && e.type === 'directory'
+          }));
+
+        // Build tree structure
+        const lines: string[] = [path];
+        const sortedPaths = relevantEntries
+          .filter(e => e.path !== path)
+          .map(e => e.path)
+          .sort();
+
+        for (const entryPath of sortedPaths) {
+          const relativePath = entryPath.slice(prefix.length);
+          const depth = relativePath.split('/').filter(Boolean).length;
+
+          if (depth > maxDepth) continue;
+
+          const indent = '  '.repeat(depth - 1);
+          const name = entryPath.split('/').pop() || entryPath;
+          lines.push(`${indent}├── ${name}`);
+        }
+
+        return { stdout: truncate(lines.join('\n')), stderr: '', exitCode: 0 };
+      }
       case 'cat': {
         const path = normalizePath(args[0]);
         if (!path) return { stdout: '', stderr: 'cat: missing file path', exitCode: 2 };
@@ -104,6 +150,66 @@ async function vfsShellExecute(
           return { stdout: '', stderr: `cat: ${path}: binary or non-text file`, exitCode: 1 };
         }
         return { stdout: truncate(file.content), stderr: '', exitCode: 0 };
+      }
+      case 'head': {
+        // head [-n lines] <file>
+        let numLines = 10;
+        let filePath = '';
+
+        for (let i = 0; i < args.length; i++) {
+          const a = args[i];
+          if (a === '-n' && args[i + 1]) {
+            numLines = parseInt(args[++i]) || 10;
+          } else if (!a.startsWith('-')) {
+            filePath = a;
+          }
+        }
+
+        const path = normalizePath(filePath);
+        if (!path) return { stdout: '', stderr: 'head: missing file path', exitCode: 2 };
+
+        try {
+          const file = await vfs.readFile(projectId, path);
+          if (typeof file.content !== 'string') {
+            return { stdout: '', stderr: `head: ${path}: binary file`, exitCode: 1 };
+          }
+
+          const lines = (file.content as string).split(/\r?\n/);
+          const output = lines.slice(0, numLines).join('\n');
+          return { stdout: truncate(output), stderr: '', exitCode: 0 };
+        } catch (e: any) {
+          return { stdout: '', stderr: `head: ${path}: ${e?.message || 'file not found'}`, exitCode: 1 };
+        }
+      }
+      case 'tail': {
+        // tail [-n lines] <file>
+        let numLines = 10;
+        let filePath = '';
+
+        for (let i = 0; i < args.length; i++) {
+          const a = args[i];
+          if (a === '-n' && args[i + 1]) {
+            numLines = parseInt(args[++i]) || 10;
+          } else if (!a.startsWith('-')) {
+            filePath = a;
+          }
+        }
+
+        const path = normalizePath(filePath);
+        if (!path) return { stdout: '', stderr: 'tail: missing file path', exitCode: 2 };
+
+        try {
+          const file = await vfs.readFile(projectId, path);
+          if (typeof file.content !== 'string') {
+            return { stdout: '', stderr: `tail: ${path}: binary file`, exitCode: 1 };
+          }
+
+          const lines = (file.content as string).split(/\r?\n/);
+          const output = lines.slice(-numLines).join('\n');
+          return { stdout: truncate(output), stderr: '', exitCode: 0 };
+        } catch (e: any) {
+          return { stdout: '', stderr: `tail: ${path}: ${e?.message || 'file not found'}`, exitCode: 1 };
+        }
       }
       case 'grep': {
         // Supported: grep [-n] [-i] [-r] [-F] pattern path
@@ -156,6 +262,77 @@ async function vfsShellExecute(
         }
         return { stdout: truncate(output), stderr: '', exitCode: 0 };
       }
+      case 'rg': {
+        // ripgrep with context flags: rg [-n] [-i] [-C num] [-A num] [-B num] pattern [path]
+        const flags: Record<string, any> = { n: true, i: false, C: 0, A: 0, B: 0 };
+        const fargs: string[] = [];
+        for (let i = 0; i < args.length; i++) {
+          const a = args[i];
+          if (a.startsWith('-')) {
+            if (a === '-n') flags.n = true;
+            else if (a === '-i') flags.i = true;
+            else if (a === '-C') { flags.C = parseInt(args[++i]) || 2; }
+            else if (a === '-A') { flags.A = parseInt(args[++i]) || 2; }
+            else if (a === '-B') { flags.B = parseInt(args[++i]) || 2; }
+          } else {
+            fargs.push(a);
+          }
+        }
+        const pattern = fargs[0];
+        const path = normalizePath(fargs[1]) || '/';
+        if (!pattern) return { stdout: '', stderr: 'rg: missing pattern', exitCode: 2 };
+
+        const regex = new RegExp(pattern, flags.i ? 'i' : '');
+        const entries = await vfs.getAllFilesAndDirectories(projectId);
+        const dirPrefix = path === '/' ? '/' : (path.endsWith('/') ? path : path + '/');
+        const outLines: string[] = [];
+
+        for (const e of entries) {
+          if ('type' in e && e.type === 'directory') continue;
+          const file = e as any;
+          if (!file.path.startsWith(dirPrefix) && file.path !== path) continue;
+          if (typeof file.content !== 'string') continue;
+
+          const lines = (file.content as string).split(/\r?\n/);
+          const matchedLines = new Set<number>();
+
+          // Find all matches
+          for (let i = 0; i < lines.length; i++) {
+            if (regex.test(lines[i])) {
+              matchedLines.add(i);
+            }
+          }
+
+          if (matchedLines.size === 0) continue;
+
+          // Add context lines
+          const contextLines = new Set<number>();
+          const beforeContext = flags.C || flags.B;
+          const afterContext = flags.C || flags.A;
+
+          for (const lineNum of matchedLines) {
+            for (let j = Math.max(0, lineNum - beforeContext); j <= Math.min(lines.length - 1, lineNum + afterContext); j++) {
+              contextLines.add(j);
+            }
+          }
+
+          // Output with line numbers
+          const sortedLines = Array.from(contextLines).sort((a, b) => a - b);
+          if (outLines.length > 0) outLines.push(''); // Separator between files
+
+          for (const lineNum of sortedLines) {
+            const lineNumStr = flags.n ? `${lineNum + 1}:` : '';
+            const isMatch = matchedLines.has(lineNum);
+            outLines.push(`${file.path}:${lineNumStr}${lines[lineNum]}`);
+          }
+        }
+
+        if (outLines.length === 0) {
+          const location = path === '/' ? 'workspace root' : path;
+          return { stdout: '', stderr: `rg: pattern "${pattern}" not found in ${location}`, exitCode: 1 };
+        }
+        return { stdout: truncate(outLines.join('\n')), stderr: '', exitCode: 0 };
+      }
       case 'find': {
         // Supported: find <path> -name <pattern>; tolerate -maxdepth and -type flags
         let rootArg: string | undefined;
@@ -191,6 +368,26 @@ async function vfsShellExecute(
           await vfs.createDirectory(projectId, path);
         }
         return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      case 'touch': {
+        // touch <file> - create empty file or update timestamp
+        const path = normalizePath(args[0]);
+        if (!path) return { stdout: '', stderr: 'touch: missing file path', exitCode: 2 };
+
+        try {
+          // Check if file exists
+          await vfs.readFile(projectId, path);
+          // File exists, just return success (we don't update timestamps)
+          return { stdout: '', stderr: '', exitCode: 0 };
+        } catch {
+          // File doesn't exist, create it with empty content
+          try {
+            await vfs.createFile(projectId, path, '');
+            return { stdout: '', stderr: '', exitCode: 0 };
+          } catch (e: any) {
+            return { stdout: '', stderr: `touch: ${path}: ${e?.message || 'cannot create file'}`, exitCode: 1 };
+          }
+        }
       }
       case 'rm': {
         // Enhanced rm command: rm [-rfv] <file/dir...>
@@ -252,51 +449,6 @@ async function vfsShellExecute(
         const stderr = hadError && !verbose ? 'rm: some paths could not be removed' : '';
         return { stdout: truncate(stdout), stderr, exitCode: hadError ? 1 : 0 };
       }
-      case 'rmdir': {
-        // rmdir command for removing empty directories
-        const targets: string[] = [];
-        let verbose = false;
-        
-        for (const arg of args) {
-          if (arg === '-v' || arg === '--verbose') {
-            verbose = true;
-          } else if (arg && !arg.startsWith('-')) {
-            targets.push(arg);
-          }
-        }
-        
-        if (targets.length === 0) return { stdout: '', stderr: 'rmdir: missing operand', exitCode: 2 };
-        
-        let hadError = false;
-        const verboseOutput: string[] = [];
-        
-        for (const target of targets) {
-          const path = normalizePath(target);
-          if (!path) {
-            hadError = true;
-            continue;
-          }
-          
-          try {
-            // Check if directory is empty by listing its contents
-            const contents = await vfs.listDirectory(projectId, path);
-            if (contents.length > 0) {
-              hadError = true;
-              if (verbose) verboseOutput.push(`rmdir: failed to remove '${path}': Directory not empty`);
-            } else {
-              await vfs.deleteDirectory(projectId, path);
-              if (verbose) verboseOutput.push(`rmdir: removing directory, '${path}'`);
-            }
-          } catch {
-            hadError = true;
-            if (verbose) verboseOutput.push(`rmdir: failed to remove '${path}': No such file or directory`);
-          }
-        }
-        
-        const stdout = verbose ? verboseOutput.join('\n') : '';
-        const stderr = hadError && !verbose ? 'rmdir: failed to remove one or more directories' : '';
-        return { stdout: truncate(stdout), stderr, exitCode: hadError ? 1 : 0 };
-      }
       case 'mv': {
         const [rold, rnew] = args;
         const oldPath = normalizePath(rold);
@@ -356,110 +508,40 @@ async function vfsShellExecute(
         }
       }
       case 'echo': {
-        // Disallow file redirection; edits must go through json_patch
-        if (args.includes('>') || args.includes('>>')) {
-          return { stdout: '', stderr: 'echo: redirection is not supported in this environment. Use json_patch to edit files.', exitCode: 2 };
+        // Support: echo text or echo "text" > /file.txt
+        const redirectIndex = args.indexOf('>');
+
+        if (redirectIndex === -1) {
+          // No redirection, just output to stdout
+          return { stdout: truncate(args.join(' ')), stderr: '', exitCode: 0 };
         }
-        return { stdout: truncate(args.join(' ')), stderr: 'echo prints to stdout only. To modify files, use json_patch.', exitCode: 1 };
-      }
-      case 'nl': {
-        // Number lines: nl [-ba] <file>
-        let showAll = false;
-        let filePath = '';
-        
-        for (const arg of args) {
-          if (arg === '-ba') {
-            showAll = true;
-          } else if (!arg.startsWith('-')) {
-            filePath = arg;
-          }
+
+        // Handle redirection: echo text > /file.txt
+        const content = args.slice(0, redirectIndex).join(' ');
+        const targetFile = args[redirectIndex + 1];
+        const path = normalizePath(targetFile);
+
+        if (!path) {
+          return { stdout: '', stderr: 'echo: missing file path after >', exitCode: 2 };
         }
-        
-        const path = normalizePath(filePath);
-        if (!path) return { stdout: '', stderr: 'nl: missing file path', exitCode: 2 };
-        
+
         try {
-          const file = await vfs.readFile(projectId, path);
-          if (typeof file.content !== 'string') {
-            return { stdout: '', stderr: `nl: ${path}: binary file`, exitCode: 1 };
+          // Ensure parent directory exists
+          const dirPath = path.split('/').slice(0, -1).join('/') || '/';
+          if (dirPath !== '/') {
+            await ensureDirectory(vfs, projectId, dirPath);
           }
-          
-          const lines = (file.content as string).split(/\r?\n/);
-          const numberedLines = lines.map((line, index) => {
-            const lineNum = String(index + 1).padStart(6, ' ');
-            return `${lineNum}\t${line}`;
-          });
-          
-          return { stdout: truncate(numberedLines.join('\n')), stderr: '', exitCode: 0 };
+
+          // Create or overwrite the file
+          try {
+            await vfs.createFile(projectId, path, content);
+          } catch {
+            await vfs.updateFile(projectId, path, content);
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
         } catch (e: any) {
-          return { stdout: '', stderr: `nl: ${path}: ${e?.message || 'file not found'}`, exitCode: 1 };
+          return { stdout: '', stderr: `echo: ${path}: ${e?.message || 'cannot write file'}`, exitCode: 1 };
         }
-      }
-      case 'sed': {
-        // Support both substitution and line printing modes (non-persisting preview only)
-        if (args.length === 0) {
-          return { stdout: '', stderr: 'sed: usage: sed "s/pat/repl/g" <file> or sed -n "1,80p" <file>', exitCode: 2 };
-        }
-        
-        // Check for -n flag (quiet mode)
-        let quietMode = false;
-        let scriptIndex = 0;
-        let pathIndex = 1;
-        
-        if (args[0] === '-n') {
-          quietMode = true;
-          scriptIndex = 1;
-          pathIndex = 2;
-        }
-        
-        const script = args[scriptIndex];
-        const path = args[pathIndex];
-        
-        if (!script || !path) {
-          return { stdout: '', stderr: 'sed: usage: sed "s/pat/repl/g" <file> or sed -n "1,80p" <file>', exitCode: 2 };
-        }
-        
-        // Handle line range printing (like "1,80p")
-        const lineRangeMatch = script.match(/^(\d+),(\d+)p$/);
-        if (lineRangeMatch) {
-          const startLine = parseInt(lineRangeMatch[1]);
-          const endLine = parseInt(lineRangeMatch[2]);
-          
-          const file = await vfs.readFile(projectId, path);
-          if (typeof file.content !== 'string') return { stdout: '', stderr: 'sed: binary file', exitCode: 1 };
-          
-          const lines = (file.content as string).split('\n');
-          const selectedLines = lines.slice(startLine - 1, endLine); // Convert to 0-based indexing
-          return { stdout: truncate(selectedLines.join('\n')), stderr: 'sed output is preview-only. To save, use json_patch.', exitCode: 0 };
-        }
-        
-        // Handle single line printing (like "80p")
-        const singleLineMatch = script.match(/^(\d+)p$/);
-        if (singleLineMatch) {
-          const lineNum = parseInt(singleLineMatch[1]);
-          
-          const file = await vfs.readFile(projectId, path);
-          if (typeof file.content !== 'string') return { stdout: '', stderr: 'sed: binary file', exitCode: 1 };
-          
-          const lines = (file.content as string).split('\n');
-          if (lineNum <= 0 || lineNum > lines.length) {
-            return { stdout: '', stderr: `sed: line ${lineNum} out of range`, exitCode: 1 };
-          }
-          return { stdout: truncate(lines[lineNum - 1]), stderr: 'sed output is preview-only. To save, use json_patch.', exitCode: 0 };
-        }
-        
-        // Handle substitution (original functionality)
-        const substitutionMatch = script.match(/^s\/(.*)\/(.*)\/(g?)$/);
-        if (substitutionMatch) {
-          const [, pat, repl] = substitutionMatch;
-          const file = await vfs.readFile(projectId, path);
-          if (typeof file.content !== 'string') return { stdout: '', stderr: 'sed: binary file', exitCode: 1 };
-          const re = new RegExp(pat, 'g');
-          const out = (file.content as string).replace(re, repl);
-          return { stdout: truncate(out), stderr: 'sed output is preview-only. To save, use json_patch.', exitCode: quietMode ? 0 : 1 };
-        }
-        
-        return { stdout: '', stderr: 'sed: supported formats: "s/pat/repl/g", "1,80p", "80p". Use json_patch for file changes.', exitCode: 2 };
       }
       default: {
         const bashHint = program === 'bash' ? `
@@ -467,34 +549,35 @@ Don't use "bash" as a command - call the shell tool directly with your command.
 Wrong: {"cmd": ["bash", "-c", "ls -la"]}
 Right: {"cmd": ["ls", "-la"]}
 ` : '';
-        
-        return { 
-          stdout: '', 
+
+        return {
+          stdout: '',
           stderr: `${program}: command not found${bashHint}
 
-Supported commands: ls, cat, grep, find, mkdir, rm, rmdir, mv, cp, echo, nl, sed
+Supported commands: ls, tree, cat, head, tail, rg, grep, find, mkdir, touch, rm, mv, cp, echo
 
 Correct shell tool usage:
-  {"cmd": ["ls", "/"]}                     - List files
-  {"cmd": ["cat", "/file.txt"]}            - Read file content  
-  {"cmd": ["grep", "pattern", "/file.txt"]} - Search with regex
+  {"cmd": ["ls", "/"]}                        - List files
+  {"cmd": ["ls", "-R", "/"]}                  - List files recursively
+  {"cmd": ["tree", "/", "-L", "2"]}           - Show directory tree (max depth 2)
+  {"cmd": ["cat", "/file.txt"]}               - Read entire file
+  {"cmd": ["head", "-n", "20", "/file.txt"]}  - Read first 20 lines
+  {"cmd": ["tail", "-n", "20", "/file.txt"]}  - Read last 20 lines
+  {"cmd": ["rg", "-C", "3", "pattern", "/"]}  - Search with 3 lines context (recommended)
+  {"cmd": ["rg", "-A", "2", "-B", "1", "pattern"]} - Search with custom context
+  {"cmd": ["grep", "-n", "pattern", "/file.txt"]} - Search with line numbers
   {"cmd": ["grep", "-F", "literal", "/file.txt"]} - Search literal string
-  {"cmd": ["find", "/", "-name", "*.js"]}  - Find files by name
-  {"cmd": ["mkdir", "/dirname"]}           - Create directory
-  {"cmd": ["rm", "/file.txt"]}             - Delete file
-  {"cmd": ["rm", "-r", "/dirname"]}        - Delete directory recursively
-  {"cmd": ["rm", "-rf", "/dirname"]}       - Force delete directory
-  {"cmd": ["rm", "-rfv", "/dir1", "/dir2"]} - Verbose force delete multiple
-  {"cmd": ["rmdir", "/empty-dir"]}         - Remove empty directory
-  {"cmd": ["rmdir", "-v", "/dir1"]}        - Remove empty directory (verbose)
-  {"cmd": ["mv", "/old.txt", "/new.txt"]}  - Move/rename files
-  {"cmd": ["cp", "/file.txt", "/copy.txt"]} - Copy files
-  {"cmd": ["echo", "text"]}                - Output text (read-only)
-  {"cmd": ["nl", "/file.txt"]}             - Show file with line numbers
-  {"cmd": ["sed", "s/old/new/g", "/file.txt"]} - Preview text replacement
+  {"cmd": ["find", "/", "-name", "*.js"]}     - Find files by name
+  {"cmd": ["mkdir", "-p", "/path/to/dir"]}    - Create directory (with parents)
+  {"cmd": ["touch", "/file.txt"]}             - Create empty file
+  {"cmd": ["rm", "-rf", "/dirname"]}          - Delete directory recursively
+  {"cmd": ["mv", "/old.txt", "/new.txt"]}     - Move/rename files
+  {"cmd": ["cp", "-r", "/src", "/dest"]}      - Copy files/directories
+  {"cmd": ["echo", "Hello World"]}            - Output text
+  {"cmd": ["echo", "content", ">", "/file.txt"]} - Write text to file
 
-Note: File edits require the json_patch tool, not shell commands.`, 
-          exitCode: 127 
+Note: Use json_patch tool for complex file editing. Use rg (ripgrep) instead of grep for better context.`,
+          exitCode: 127
         };
       }
     }

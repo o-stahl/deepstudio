@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.10.0 - 2025-02-02
+- Added token-efficient shell commands: `rg` (ripgrep), `head`, `tail`, `tree`, `touch`, and `echo >` redirection
+- Removed redundant commands: `sed`, `nl`, `rmdir`
+- Enhanced system prompt to discourage `cat` usage with decision flowchart and token cost warnings
+
 ## v1.9.1 - 2025-01-30
 - Fixed Handlebars navigation links being converted to blob URLs instead of remaining as routes
 

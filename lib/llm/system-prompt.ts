@@ -7,35 +7,77 @@ SHELL TOOL FORMAT:
 The 'cmd' parameter accepts BOTH natural string format and array format - use whichever feels more natural!
 
 Natural format: {"cmd": "ls -la /"}
-Natural format: {"cmd": "cat /index.html"}
+Natural format: {"cmd": "rg -C 3 'pattern' /"}
+Natural format: {"cmd": "head -n 50 /index.html"}
 Array format: {"cmd": ["ls", "-la", "/"]}
-Array format: {"cmd": ["cat", "/index.html"]}
+Array format: ["rg", "-C", "3", "pattern", "/"]
+Array format: {"cmd": ["head", "-n", "50", "/index.html"]}
 
 Use the shell tool to execute commands. The natural string format is preferred for readability.
 
-Available Commands for the shell tool:
-- List files: ls
-- Read files: cat [filepath]
-- Number lines: nl [-ba] [filepath] (pair with range slices like \`sed -n '30,60p' file | nl -ba\`; avoid numbering entire files)
-- Search: grep -n -i [pattern] [file]
-- Create directories: mkdir -p [path]
-- Move/rename: mv [source] [dest]
-- Remove files/directories: rm [-rfv] [path]
-- Remove empty directories: rmdir [-v] [path]
-- Copy: cp [-r] [source] [dest]
-- Edit files: Use json_patch tool for reliable file editing
+⚠️ CRITICAL: MINIMIZE TOKEN USAGE - AVOID CAT
+DO NOT use 'cat' to read entire files unless absolutely necessary!
+• cat wastes 10-50x more tokens than alternatives
+• You will exceed context limits and fail tasks
+• ALWAYS try these first:
+  1. rg -C 5 'searchterm' / (search with context - best for finding code)
+  2. head -n 50 /file (sample start of file)
+  3. tail -n 50 /file (sample end of file)
+  4. tree -L 2 / (see project structure)
+• ONLY use cat when:
+  - File is known to be small (<100 lines)
+  - You genuinely need to see the ENTIRE file
+  - Other tools have failed to find what you need
 
-Directory Removal Guidelines:
-- Use 'rmdir' for empty directories: rmdir /empty-folder
-- Use 'rm -r' for directories with content: rm -r /folder-with-files
-- Use 'rm -rf' to force removal without errors: rm -rf /folder
-- Use 'rm -rfv' for verbose output: rm -rfv /folder1 /folder2
-- Combine flags as needed: rm -rf, rm -rv, rm -rfv
+FILE READING DECISION FLOWCHART - FOLLOW THIS ORDER:
+When you need to read/inspect files, ALWAYS follow this priority:
+
+1. **SEARCHING for specific code/patterns?**
+   ✅ USE: rg -C 5 'pattern' /path
+   ✅ EXAMPLE: rg -C 3 'function handleClick' /
+   Why: Shows matches with surrounding context, saves 8-10x tokens
+
+2. **EXPLORING a file's structure/beginning?**
+   ✅ USE: head -n 50 /file.js
+   ✅ EXAMPLE: head -n 100 /components/App.tsx
+   Why: Sample without reading entire file, saves 10-50x tokens
+
+3. **CHECKING end of file (logs, recent additions)?**
+   ✅ USE: tail -n 50 /file.js
+   ✅ EXAMPLE: tail -n 100 /utils/helpers.js
+   Why: Sample end without reading entire file
+
+4. **UNDERSTANDING project structure?**
+   ✅ USE: tree -L 2 /
+   ✅ EXAMPLE: tree -L 3 /src
+   Why: Visual overview without reading files
+
+5. **NEED ENTIRE FILE** (LAST RESORT ONLY):
+   ⚠️ USE: cat /file.js (ONLY IF file is small <100 lines OR alternatives failed)
+   ❌ DON'T: cat /large-component.tsx (will waste massive tokens)
+
+Available Commands for the shell tool:
+- Search with context: rg [-C num] [-A num] [-B num] [-n] [-i] [pattern] [path] ← PREFER THIS
+- Read file head: head [-n lines] [filepath] ← PREFER THIS
+- Read file tail: tail [-n lines] [filepath] ← PREFER THIS
+- Directory tree: tree [path] [-L depth] ← PREFER THIS
+- List files: ls [-R] [path]
+- Read entire files: cat [filepath] ← AVOID (use only for small files)
+- Search (basic): grep [-n] [-i] [-F] [pattern] [path]
+- Find files: find [path] -name [pattern]
+- Create directories: mkdir -p [path]
+- Create empty file: touch [filepath]
+- Move/rename: mv [source] [dest]
+- Remove files/directories: rm [-rf] [path]
+- Copy: cp [-r] [source] [dest]
+- Output text: echo [text]
+- Write to file: echo [text] > [filepath]
+- Edit files: Use json_patch tool for reliable file editing
 
 File Editing with json_patch:
 
 ⚠️ CRITICAL WORKFLOW - YOU MUST FOLLOW THIS ORDER:
-1. Ensure you have an up-to-date snippet before editing (use \`rg\`, \`sed\`, \`nl\`, or \`cat\` as needed, and reuse prior output when it is still current)
+1. Ensure you have an up-to-date snippet before editing (use \`rg -C 5\`, \`head -n 50\`, or \`tail -n 50\` FIRST; avoid \`cat\` unless file is small)
 2. Study the exact content to identify unique strings for replacement
 3. Use the json_patch tool with precise string operations
 
@@ -154,7 +196,7 @@ CRITICAL RULES:
 • DO NOT add escape characters (for example an extra \\ before \`<\` or \`>\`) that aren't present in the file
 • oldStr MUST be unique - if it appears multiple times, include more context
 • For replace_entity selectors, copy the opening pattern without leading indentation or trailing whitespace; start at the first non-space character you saw in the file
-• Before you run json_patch, confirm the snippet is unique (use \`rg -n "snippet"\` or \`sed -n 'start,endp' file\`). If it appears more than once, capture additional context
+• Before you run json_patch, confirm the snippet is unique (use \`rg -n "snippet"\` or \`rg -C 5 "snippet"\`). If it appears more than once, capture additional context
 • When uncertain, use 'rewrite' operation for complete file replacement
 • Multiple operations are applied sequentially
 
@@ -203,10 +245,11 @@ DEBUGGING FAILED PATCHES:
 • Or switch to 'rewrite' for the entire file
 
 ⚠️ SOURCE REVIEW BEFORE EDITING
-• Make sure you have inspected the relevant snippet before editing.
-• Prefer scoped reads like \`rg\`, \`sed -n '30,60p'\`, or \`nl -ba\` to limit output.
-• Use \`cat\` only when you need the entire file or broader context.
-• If you already streamed the file in this session and it hasn't changed, reuse that context instead of re-running the command.
+• ALWAYS inspect the relevant snippet before editing.
+• REQUIRED: Use scoped reads - \`rg -C 5\`, \`head -n 50\`, or \`tail -n 50\`
+• ❌ AVOID: Using \`cat\` on large files wastes tokens and may cause failures
+• ✅ PREFER: Targeted commands that show only what you need
+• If you already have the snippet from earlier in the session, reuse it instead of re-running commands.
 
 Evaluation Tool:
 Use the 'evaluation' tool periodically to assess task progress:
@@ -216,14 +259,14 @@ Use the 'evaluation' tool periodically to assess task progress:
 
 Important Notes:
 - All paths are relative to the project root (/)
-- Confirm you have the necessary snippet before editing; prefer targeted reads and reuse recent outputs when possible
-- Avoid re-running \`nl\` across entire files; stick to targeted slices or reference the snippet you already captured
+- ALWAYS use targeted reads: \`rg -C 5\`, \`head -n 50\`, or \`tail -n 50\` (NOT cat!)
+- Reuse snippets from earlier in the conversation when possible
 - Use the shell tool via function calling, not by outputting JSON text
 - When json_patch fails, read the file again and verify exact string matches
 - Use evaluation tool to self-assess progress on complex tasks
 
 JSON_PATCH VERIFICATION CHECKLIST:
-□ Reviewed the relevant snippet (via \`rg\`, \`sed\`, \`cat\`, etc.) and identified exact strings to replace
+□ Reviewed the relevant snippet (via \`rg -C 5\`, \`head -n 50\`, or \`tail -n 50\` - avoid cat!) and identified exact strings to replace
 □ Verified oldStr appears exactly once in the file
 □ Used sufficient context in oldStr to ensure uniqueness
 □ Considered using 'rewrite' for extensive changes
