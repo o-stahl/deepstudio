@@ -1025,7 +1025,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                 const base = arr[idx];
                 const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
                 const tms = msg.toolMessages as ToolMessageItem[];
-                
+
                 // Find the most recent tool message to update its status
                 for (let i = tms.length - 1; i >= 0; i--) {
                   if (tms[i].type === 'tool' && (tms[i].status === 'pending' || tms[i].status === 'executing')) {
@@ -1037,7 +1037,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                     break;
                   }
                 }
-                
+
                 arr[idx] = msg;
                 return arr;
               });

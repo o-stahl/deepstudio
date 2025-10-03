@@ -130,9 +130,18 @@ export class Orchestrator {
   private maxIterations = 100;
   private stopped = false;
   private accumulatedToolCalls: ToolCall[] = [];
-  private evaluationResult: { goalAchieved: boolean; reasoning: string } | null = null;
+  private evaluationResult: {
+    goalAchieved: boolean;
+    reasoning: string;
+    progressSummary?: string;
+    remainingWork?: string[];
+    blockers?: string[];
+    shouldContinue?: boolean;
+  } | null = null;
   private malformedToolCallRetries = 0;
   private noToolCallRetries = 0;
+  private evaluationRequested = false;
+  private evaluationReceived = false;
   private lastIterationHadWrite = false;
   private lastCheckpointId: string | null = null;
   private recentCatReads = new Map<string, number>();
@@ -774,10 +783,15 @@ export class Orchestrator {
    */
   async execute(userPrompt: string): Promise<OrchestratorResult> {
     logger.info(`[Orchestrator] Starting execution with prompt`, { promptPreview: userPrompt.substring(0, 100) });
+
+    // Reset state for new execution
+    this.evaluationRequested = false;
+    this.evaluationReceived = false;
+
     try {
       // Snapshot current state before running tools
       await this.recordAutoCheckpoint(`Before prompt: ${userPrompt.substring(0, 60)}`);
-      
+
       // Get file tree for context (optional)
       let fileTree: string | undefined;
       try {
@@ -788,9 +802,9 @@ export class Orchestrator {
       } catch {
         // Ignore errors getting file tree
       }
-      
+
       const systemPrompt = buildShellSystemPrompt(fileTree);
-      
+
       // Initialize conversation with system prompt if empty
       if (this.conversation.length === 0) {
         this.conversation.push({
@@ -798,13 +812,13 @@ export class Orchestrator {
           content: systemPrompt
         });
       }
-      
+
       // Add user prompt to conversation
       this.conversation.push({
         role: 'user',
         content: userPrompt
       });
-      
+
       // Main execution loop
       for (let iterations = 0; iterations < this.maxIterations; iterations++) {
         // Check if generation was stopped
@@ -855,22 +869,44 @@ export class Orchestrator {
         // Handle empty or content-only responses
         if (!response.toolCalls || response.toolCalls.length === 0) {
           logger.debug(`[Orchestrator] No tool calls in response`);
+
           if (response.content && response.content.trim()) {
             // Add assistant's response to conversation
             this.conversation.push({
               role: 'assistant',
               content: response.content
             });
-            
-            const lowercaseContent = response.content.toLowerCase();
-            if (lowercaseContent.includes('complete') || 
-                lowercaseContent.includes('done') ||
-                lowercaseContent.includes('finished')) {
-              this.taskComplete = true;
+
+            // If meaningful work done (3+ steps), request evaluation
+            if (this.stepsCompleted >= 3 && !this.evaluationRequested && !this.evaluationReceived) {
+              logger.debug(`[Orchestrator] Requesting evaluation after ${this.stepsCompleted} steps`);
+              this.evaluationRequested = true;
+              this.conversation.push({
+                role: 'user',
+                content: 'Please use the evaluation tool to assess if the task has been completed successfully. Include progress_summary, remaining_work, and any blockers.'
+              });
+              continue; // Give LLM one more iteration to evaluate
+            }
+
+            // If we received evaluation and should stop, break
+            if (this.evaluationReceived) {
+              const shouldStop = this.taskComplete || this.evaluationResult?.shouldContinue === false;
+              if (shouldStop) {
+                logger.info(`[Orchestrator] Breaking: evaluation complete, should not continue`);
+                break;
+              }
+              // Evaluation received but should continue, reset and proceed
+              logger.debug(`[Orchestrator] Evaluation received but should_continue=true, continuing...`);
+              this.evaluationReceived = false;
+            }
+
+            // If we requested evaluation but didn't get it after multiple tries, break
+            if (this.evaluationRequested) {
+              logger.info(`[Orchestrator] Breaking: evaluation requested but not provided`);
               break;
             }
-            
-            // Try to force tool usage if we haven't made progress
+
+            // For simple tasks (< 3 steps), try to force tool usage if no progress
             if (this.stepsCompleted === 0) {
               this.noToolCallRetries++;
               logger.debug(`[Orchestrator] No progress made, retry ${this.noToolCallRetries}/2`);
@@ -883,12 +919,13 @@ export class Orchestrator {
               }
             }
           }
-          
+
+          // No text response or simple task with retries exhausted
           this.noToolCallRetries++;
           logger.debug(`[Orchestrator] No tool calls, retry ${this.noToolCallRetries}/3`);
           if (this.noToolCallRetries <= 3) {
             this.conversation.push({
-              role: 'user', 
+              role: 'user',
               content: 'Continue with the task. If you need to perform more operations, use the available tools.'
             });
             continue;
@@ -955,12 +992,12 @@ export class Orchestrator {
             const args = JSON.parse(evalCall.function.arguments);
             this.evaluationResult = {
               goalAchieved: args.goal_achieved || false,
-              reasoning: args.reasoning || ''
+              reasoning: args.reasoning || '',
+              progressSummary: args.progress_summary || '',
+              remainingWork: args.remaining_work || [],
+              blockers: args.blockers || []
             };
-            
-            // Send evaluation divider to UI
-            this.onProgress?.('divider', { title: 'Evaluation' });
-            
+
             if (args.goal_achieved) {
               logger.info(`[Orchestrator] Task marked complete by evaluation`);
               this.taskComplete = true;
@@ -970,7 +1007,7 @@ export class Orchestrator {
             logger.error('Failed to parse evaluation result:', error);
           }
         }
-        
+
         // Check if task is complete
         if (this.taskComplete || this.stepsCompleted >= 50) {
           logger.info(`[Orchestrator] Breaking: taskComplete=${this.taskComplete}, steps=${this.stepsCompleted}`);
@@ -1055,7 +1092,16 @@ The arguments must be valid JSON. Common issues:
           }
           
           if (!args.cmd) {
-            throw new Error('cmd parameter is required');
+            throw new Error(`Malformed tool call - cmd parameter is required.
+
+✅ Natural format: {"cmd": "ls -la /"}
+✅ Array format: {"cmd": ["ls", "-la", "/"]}
+
+Examples:
+- {"cmd": "cat /index.html"} - Read a file
+- {"cmd": ["rg", "-C", "5", "pattern", "/"]} - Search with context
+- {"cmd": "head -n 50 /app.js"} - Sample file start
+- {"cmd": ["tree", "-L", "2", "/"]} - Show directory structure`);
           }
           
           // Convert cmd to array format if it's a string
@@ -1208,43 +1254,95 @@ Examples:
         try {
           const args = JSON.parse(toolCall.function.arguments);
           logger.debug(`[Orchestrator] Processing evaluation:`, args);
-          
+
+          // Set flag that evaluation was received
+          this.evaluationReceived = true;
+          this.evaluationRequested = false; // Reset request flag
+
+          // Store evaluation result
+          this.evaluationResult = {
+            goalAchieved: args.goal_achieved,
+            reasoning: args.reasoning,
+            progressSummary: args.progress_summary,
+            remainingWork: args.remaining_work,
+            blockers: args.blockers,
+            shouldContinue: args.should_continue
+          };
+
           // Mark task as complete if evaluation indicates so
           if (args.goal_achieved === true) {
             logger.info(`[Orchestrator] Task marked complete by evaluation`);
             this.taskComplete = true;
           }
-          
+
           toolResults.push({
             role: 'tool',
             tool_call_id: toolId,
             content: JSON.stringify(args)
           });
-          
-          // Update tool status to completed  
-          this.onProgress?.('tool_status', { 
-            toolIndex: i, 
+
+          // Update tool status to completed
+          this.onProgress?.('tool_status', {
+            toolIndex: i,
             status: 'completed',
             result: JSON.stringify(args)
           });
           
         } catch (error) {
+          const parseError = error instanceof Error ? error.message : String(error);
+          const errorMessage = `Error parsing evaluation: ${parseError}
+
+✅ Correct format:
+{
+  "goal_achieved": true,
+  "progress_summary": "Completed hero section with CTA, features grid with 6 items",
+  "remaining_work": ["Add pricing section", "Create footer"],
+  "blockers": [],
+  "reasoning": "Hero and features complete. Next: pricing section.",
+  "should_continue": true
+}
+
+Required fields:
+• goal_achieved (boolean) - Whether the original task is fully complete
+• progress_summary (string) - Brief summary of work completed so far
+• remaining_work (array of strings) - Specific tasks still needed (empty if goal_achieved is true)
+• reasoning (string) - Detailed explanation of current status and next steps
+• should_continue (boolean) - Whether to continue working
+
+Optional field:
+• blockers (array of strings) - Current blockers preventing progress`;
+
           toolResults.push({
             role: 'tool',
             tool_call_id: toolId,
-            content: `Error parsing evaluation: ${error}`
+            content: `Error: ${errorMessage}`
           });
-          
+
           // Update tool status to failed
-          this.onProgress?.('tool_status', { 
-            toolIndex: i, 
+          this.onProgress?.('tool_status', {
+            toolIndex: i,
             status: 'failed',
-            error: `Error parsing evaluation: ${error}`
+            error: errorMessage
           });
         }
       } else {
         // Unknown tool name
-        const errorMessage = `Unknown tool: ${toolName}`;
+        const errorMessage = `Unknown tool: ${toolName}
+
+Available tools are: shell, json_patch, evaluation
+
+✅ Shell tool (execute commands):
+   {"name": "shell", "arguments": "{\\"cmd\\": \\"ls -la /\\"}"}
+
+✅ JSON patch tool (edit files):
+   {"name": "json_patch", "arguments": "{\\"file_path\\": \\"/index.html\\", \\"operations\\": [...]}"}
+
+✅ Evaluation tool (assess progress):
+   {"name": "evaluation", "arguments": "{\\"goal_achieved\\": true, \\"reasoning\\": \\"...\\"...}"}
+
+Common mistakes:
+❌ Wrong tool name: "shell<|channel|>analysis", "functions.shell", "command"
+❌ Typos: "shelll", "json-patch", "evaluate"`;
         logger.warn(`[Orchestrator] ${errorMessage}`);
         toolResults.push({
           role: 'tool',
@@ -1464,30 +1562,92 @@ ${output}`;
    */
   private generateSummary(): string {
     if (this.evaluationResult) {
-      return this.evaluationResult.reasoning;
+      let summary = this.evaluationResult.reasoning;
+
+      if (this.evaluationResult.goalAchieved) {
+        summary += '\n\n✅ Task Complete';
+
+        // Add created files summary
+        const createdFiles = this.getCreatedFilesInSession();
+        if (createdFiles.length > 0) {
+          summary += '\n\nCreated/modified files:';
+          createdFiles.forEach(file => summary += `\n• ${file}`);
+        }
+
+        // Add next steps suggestion
+        summary += '\n\nNext steps: Open the preview to test the application.';
+      } else {
+        summary += '\n\n⚠️ Task Incomplete';
+
+        if (this.evaluationResult.remainingWork && this.evaluationResult.remainingWork.length > 0) {
+          summary += '\n\nRemaining work:';
+          this.evaluationResult.remainingWork.forEach(work => summary += `\n• ${work}`);
+        }
+
+        if (this.evaluationResult.blockers && this.evaluationResult.blockers.length > 0) {
+          summary += '\n\nBlockers:';
+          this.evaluationResult.blockers.forEach(blocker => summary += `\n• ${blocker}`);
+        }
+      }
+
+      return summary;
     }
-    
+
     if (this.stepsCompleted === 0) {
       return 'No actions were taken.';
     }
-    
-    const operations = this.accumulatedToolCalls
-      .filter(tc => tc.function?.name === 'shell')
-      .map(tc => {
-        try {
-          const args = JSON.parse(tc.function.arguments);
-          return this.getOperationDescription({ name: 'shell', parameters: args });
-        } catch {
-          return 'Unknown operation';
-        }
-      });
-    
-    if (operations.length === 0) {
-      return `Completed ${this.stepsCompleted} step${this.stepsCompleted !== 1 ? 's' : ''}.`;
+
+    // Fallback summary for simple tasks
+    const createdFiles = this.getCreatedFilesInSession();
+    let summary = `Completed ${this.stepsCompleted} operation${this.stepsCompleted !== 1 ? 's' : ''}.`;
+
+    if (createdFiles.length > 0) {
+      summary += '\n\nCreated/modified files:';
+      createdFiles.forEach(file => summary += `\n• ${file}`);
     }
-    
-    const uniqueOps = [...new Set(operations)];
-    return `Completed ${this.stepsCompleted} step${this.stepsCompleted !== 1 ? 's' : ''}: ${uniqueOps.slice(0, 3).join(', ')}${uniqueOps.length > 3 ? '...' : ''}`;
+
+    return summary;
+  }
+
+  /**
+   * Track file operations during session
+   */
+  private getCreatedFilesInSession(): string[] {
+    const files = new Set<string>();
+
+    for (const toolCall of this.accumulatedToolCalls) {
+      if (toolCall.function?.name === 'json_patch') {
+        try {
+          const args = JSON.parse(toolCall.function.arguments);
+          if (args.file_path) files.add(args.file_path);
+        } catch {}
+      } else if (toolCall.function?.name === 'shell') {
+        try {
+          const args = JSON.parse(toolCall.function.arguments);
+          const cmd = Array.isArray(args.cmd) ? args.cmd : [];
+
+          // Track file creation commands
+          if (cmd[0] === 'touch' && cmd[1]) {
+            files.add(cmd[1]);
+          }
+          if (cmd[0] === 'mkdir' && cmd.includes('-p')) {
+            const dirPath = cmd[cmd.length - 1];
+            if (dirPath && dirPath.startsWith('/')) {
+              files.add(dirPath + '/');
+            }
+          }
+          // Track echo > file (file creation)
+          if (cmd[0] === 'echo' && cmd.includes('>')) {
+            const redirectIndex = cmd.indexOf('>');
+            if (redirectIndex > 0 && cmd[redirectIndex + 1]) {
+              files.add(cmd[redirectIndex + 1]);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    return Array.from(files).sort();
   }
   
   /**

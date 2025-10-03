@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.11.0 - 2025-02-03
+- Enhanced evaluation tool with goal-oriented progress tracking (progress_summary, remaining_work, blockers)
+- Improved orchestrator loop to properly enforce evaluation after meaningful work (3+ steps)
+- Fixed evaluation state handling: now correctly respects should_continue flag
+- Added comprehensive error messages with examples for all tool call failures
+- Unified error message format across shell, json_patch, and evaluation tools
+- Added file creation guidelines to system prompt for cleaner project structure
+
 ## v1.10.0 - 2025-02-02
 - Added token-efficient shell commands: `rg` (ripgrep), `head`, `tail`, `tree`, `touch`, and `echo >` redirection
 - Removed redundant commands: `sed`, `nl`, `rmdir`
