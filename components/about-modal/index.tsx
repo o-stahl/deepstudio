@@ -30,7 +30,7 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
           <div className="flex items-center gap-4 mb-2">
             <Logo width={64} height={64} />
             <div>
-              <DialogTitle className="text-2xl">DeepStudio</DialogTitle>
+              <DialogTitle className="text-2xl">Open Source Web Studio</DialogTitle>
               <DialogDescription className="text-base">
                 Browser-based Website Builder
               </DialogDescription>
@@ -42,7 +42,7 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
           <section>
             <div className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed space-y-3">
               <p>
-                DeepStudio is a fork from @enzostvs and @victor's DeepSite v2 that over the months of tinkering became a BYOK (Bring Your Own Key) agentic browser-based website builder where you describe what you want and an agent writes the code.
+                OSW Studio is a BYOK (Bring Your Own Key) agentic browser-based website builder where you describe what you want and an agent writes the code. Originally forked from @enzostvs and @victor's DeepSite v2, it has evolved into a full-featured development environment.
               </p>
               
               <p>
@@ -59,7 +59,7 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
             <h3 className="font-semibold text-lg mb-3">Links & Support</h3>
             <div className="flex flex-col gap-2">
               <a
-                href="https://github.com/o-stahl/deepstudio"
+                href="https://github.com/o-stahl/osw-studio"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
@@ -69,7 +69,7 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
                 <ExternalLink className="h-3 w-3" />
               </a>
               <a
-                href="https://huggingface.co/spaces/o-stahl/deepstudio"
+                href="https://huggingface.co/spaces/otst/oswstudio"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"

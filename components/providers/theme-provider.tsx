@@ -16,7 +16,7 @@ export function ThemeProvider({
   attribute = 'class',
   defaultTheme = 'dark',
   enableSystem = true,
-  storageKey = 'deepstudio-theme',
+  storageKey = 'osw-studio-theme',
   ...props
 }: ThemeProviderProps) {
   return (

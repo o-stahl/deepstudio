@@ -57,7 +57,7 @@ export interface AppSettings {
 }
 
 class ConfigManager {
-  private readonly STORAGE_KEY = 'deepstudio-settings';
+  private readonly STORAGE_KEY = 'osw-studio-settings';
 
   getSettings(): AppSettings {
     if (typeof window === 'undefined') {
@@ -297,7 +297,7 @@ class ConfigManager {
     this.setSetting('costSettings', settings);
     // Broadcast the change to reactive components
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('deepstudio-cost-settings-changed'));
+      window.dispatchEvent(new CustomEvent('osw-studio-cost-settings-changed'));
     }
   }
 

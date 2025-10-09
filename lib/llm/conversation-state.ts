@@ -34,40 +34,27 @@ interface StoredConversationState {
 export class ConversationStateManager {
   private conversations: Map<string, ConversationState> = new Map();
   private conversationBreaks: Map<string, ConversationBreak[]> = new Map();
-  private dbName = 'DeepStudioConversations';
   private storeName = 'conversations';
-  private db: IDBDatabase | null = null;
   private isInitialized = false;
 
   /**
-   * Initialize the IndexedDB database
+   * Initialize by ensuring VFS database is ready
    */
   private async initDB(): Promise<void> {
     if (this.isInitialized) return;
 
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 1);
+    // Import vfs dynamically to avoid circular dependency
+    const { vfs } = await import('@/lib/vfs');
+    await vfs.init();
+    this.isInitialized = true;
+  }
 
-      request.onerror = () => {
-        logger.error('Failed to open conversation database');
-        reject(request.error);
-      };
-
-      request.onsuccess = () => {
-        this.db = request.result;
-        this.isInitialized = true;
-        resolve();
-      };
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
-          store.createIndex('projectId', 'projectId', { unique: false });
-          store.createIndex('lastUpdated', 'lastUpdated', { unique: false });
-        }
-      };
-    });
+  /**
+   * Get shared database connection from VFS
+   */
+  private async getDB(): Promise<IDBDatabase> {
+    const { vfs } = await import('@/lib/vfs');
+    return (vfs as any).db.getDatabase();
   }
 
   /**
@@ -82,12 +69,12 @@ export class ConversationStateManager {
    */
   private async loadConversationFromDB(projectId: string): Promise<ConversationState | null> {
     await this.initDB();
-    if (!this.db) return null;
+    const db = await this.getDB();
 
     const conversationId = this.getConversationId(projectId);
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const transaction = db.transaction([this.storeName], 'readonly');
       const store = transaction.objectStore(this.storeName);
       const request = store.get(conversationId);
 
@@ -101,10 +88,10 @@ export class ConversationStateManager {
             lastUpdated: stored.lastUpdated,
             version: stored.version || 1
           };
-          
+
           // Load conversation breaks
           this.conversationBreaks.set(projectId, stored.breaks || []);
-          
+
           resolve(conversation);
         } else {
           resolve(null);
@@ -123,10 +110,10 @@ export class ConversationStateManager {
    */
   private async saveConversationToDB(conversation: ConversationState): Promise<void> {
     await this.initDB();
-    if (!this.db) return;
+    const db = await this.getDB();
 
     const breaks = this.conversationBreaks.get(conversation.projectId) || [];
-    
+
     const storedConversation: StoredConversationState = {
       id: conversation.id,
       projectId: conversation.projectId,
@@ -137,7 +124,7 @@ export class ConversationStateManager {
     };
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const transaction = db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.put(storedConversation);
 
@@ -154,12 +141,12 @@ export class ConversationStateManager {
    */
   private async deleteConversationFromDB(projectId: string): Promise<void> {
     await this.initDB();
-    if (!this.db) return;
+    const db = await this.getDB();
 
     const conversationId = this.getConversationId(projectId);
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const transaction = db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.delete(conversationId);
 

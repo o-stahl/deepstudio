@@ -123,7 +123,7 @@ export class Orchestrator {
     totalTokens: 0,
     cost: 0
   };
-  
+
   private conversation: OrchestratorMessage[] = [];
   private stepsCompleted = 0;
   private taskComplete = false;
@@ -146,15 +146,22 @@ export class Orchestrator {
   private lastCheckpointId: string | null = null;
   private recentCatReads = new Map<string, number>();
   private pricingEnsured = new Set<string>();
-  
+  private chatMode: boolean;
+  private model?: string;
+  private globalToolIndex = 0;
+  private lastToolCallSignature: string | null = null;
+
   constructor(
     projectId: string,
     existingConversation?: OrchestratorMessage[],
-    onProgress?: (message: string, step?: unknown) => void
+    onProgress?: (message: string, step?: unknown) => void,
+    options?: { chatMode?: boolean; model?: string }
   ) {
     this.projectId = projectId;
     this.onProgress = onProgress;
     this.conversation = existingConversation || [];
+    this.chatMode = options?.chatMode ?? false;
+    this.model = options?.model;
   }
 
   /**
@@ -202,13 +209,14 @@ export class Orchestrator {
     const provider = configManager.getSelectedProvider();
     const providerConfig = getProvider(provider);
     const apiKey = configManager.getProviderApiKey(provider);
-    const model = configManager.getProviderModel(provider) || undefined;
-    
+    // Use this.model if set (for chat/code mode separation), otherwise fall back to default
+    const model = this.model || configManager.getProviderModel(provider) || undefined;
+
     // Only require API key for providers that need it
     if (providerConfig.apiKeyRequired && !apiKey) {
       throw new Error(`API key not configured for provider: ${provider}`);
     }
-    
+
     return {
       provider,
       providerConfig,
@@ -238,16 +246,22 @@ export class Orchestrator {
     provider: string,
     apiKey: string,
     model: string,
-    options?: { suppressAssistantDelta?: boolean; toolChoice?: 'auto' | 'required' | 'any'; maxTokens?: number }
+    options?: { suppressAssistantDelta?: boolean; toolChoice?: 'auto' | 'required' | 'any'; maxTokens?: number; enableEarlyToolCallNotification?: boolean }
   ): Promise<StreamResponse> {
     await this.ensurePricing(provider, model);
 
-    const apiUrl = typeof window !== 'undefined' 
+    const apiUrl = typeof window !== 'undefined'
       ? `${window.location.origin}/api/generate`
       : '/api/generate';
-    
+
+    // Strip ui_metadata from messages before sending to API (providers reject unknown fields)
+    const sanitizedMessages = messages.map(msg => {
+      const { ui_metadata, ...rest } = msg;
+      return rest;
+    });
+
     const requestBody = {
-      messages,
+      messages: sanitizedMessages,
       apiKey,
       model,
       provider,
@@ -262,7 +276,7 @@ export class Orchestrator {
     });
     
     const response = await this.fetchWithRetry(
-      apiUrl, 
+      apiUrl,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -271,11 +285,21 @@ export class Orchestrator {
       3,
       this.handleRetry.bind(this)
     );
-    
+
     if (!response.ok) {
-      throw new Error(`API call failed: ${response.statusText}`);
+      let errorMessage = `API call failed: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.error) {
+          // Extract the detailed error message from API route response
+          errorMessage = errorData.error;
+        }
+      } catch {
+        // Failed to parse JSON error response, use statusText
+      }
+      throw new Error(errorMessage);
     }
-    
+
     return this.parseStreamingResponse(response, provider, options?.suppressAssistantDelta === true);
   }
   
@@ -342,12 +366,26 @@ export class Orchestrator {
                   toolCallsById[json.content_block.id] = toolCall;
                   anthropicToolBuffers[json.content_block.id] = '';
                   contentBlockIndexToToolId[json.index] = json.content_block.id;
+
+                  // Emit early notification for this tool call
+                  if (!suppressAssistantDelta) {
+                    this.onProgress?.('toolCalls', { toolCalls: [toolCall] });
+                  }
                 } else if (json.type === 'content_block_delta' && json.delta?.type === 'input_json_delta') {
                   const contentBlockIndex = json.index;
                   const toolId = contentBlockIndexToToolId[contentBlockIndex];
-                  
+
                   if (toolId && json.delta.partial_json) {
                     anthropicToolBuffers[toolId] += json.delta.partial_json;
+
+                    // Update the tool call with partial parameters
+                    if (!suppressAssistantDelta && toolCallsById[toolId]) {
+                      toolCallsById[toolId].function.arguments = anthropicToolBuffers[toolId];
+                      this.onProgress?.('tool_param_delta', {
+                        toolId,
+                        partialArguments: anthropicToolBuffers[toolId]
+                      });
+                    }
                   }
                 } else if (json.type === 'content_block_stop') {
                   const contentBlockIndex = json.index;
@@ -367,7 +405,18 @@ export class Orchestrator {
               } else {
                 // Handle OpenAI/OpenRouter streaming format
                 const delta = json.choices?.[0]?.delta;
-                
+                const finishReason = json.choices?.[0]?.finish_reason;
+
+                // Check for finish_reason to detect completion
+                if (finishReason === 'stop' || finishReason === 'tool_calls') {
+                  // Stream completed - finalize any pending tool calls
+                  if (currentToolCall && toolCallBuffer && currentToolCall.function && currentToolCall.id) {
+                    currentToolCall.function.arguments = toolCallBuffer;
+                    toolCallsById[currentToolCall.id] = currentToolCall as ToolCall;
+                  }
+                  break;
+                }
+
                 // Check for reasoning field (some models output their thinking here)
                 if (delta?.reasoning && !delta?.content && !delta?.tool_calls) {
                   // Some models output their tool calls as JSON in the reasoning field
@@ -388,21 +437,36 @@ export class Orchestrator {
                   for (const tc of delta.tool_calls) {
                     if (tc.index !== undefined) {
                       const key = `idx_${tc.index}`;
-                      if (!toolCallsById[key]) {
+                      const isNewTool = !toolCallsById[key];
+
+                      if (isNewTool) {
                         toolCallsById[key] = {
                           id: tc.id || `tool_${tc.index}`,
                           type: 'function' as const,
                           function: { name: '', arguments: '' }
                         };
                       }
-                      
+
                       if (tc.function?.name) {
                         toolCallsById[key].function.name = tc.function.name;
+
+                        // Emit early notification when we first see the tool name
+                        if (isNewTool && !suppressAssistantDelta) {
+                          this.onProgress?.('toolCalls', { toolCalls: [toolCallsById[key]] });
+                        }
                       }
-                      
+
                       if (tc.function?.arguments) {
                         const argFragment = tc.function.arguments;
                         toolCallsById[key].function.arguments += argFragment;
+
+                        // Stream parameter updates
+                        if (!suppressAssistantDelta) {
+                          this.onProgress?.('tool_param_delta', {
+                            toolId: toolCallsById[key].id,
+                            partialArguments: toolCallsById[key].function.arguments
+                          });
+                        }
                       }
                     } else if (tc.id) {
                       if (currentToolCall && toolCallBuffer && currentToolCall.function && currentToolCall.id) {
@@ -418,9 +482,22 @@ export class Orchestrator {
                         }
                       };
                       toolCallBuffer = tc.function?.arguments || '';
+
+                      // Emit early notification for new tool call
+                      if (!suppressAssistantDelta && currentToolCall.function?.name) {
+                        this.onProgress?.('toolCalls', { toolCalls: [currentToolCall as ToolCall] });
+                      }
                     } else if (tc.function?.arguments) {
                       const argFragment = tc.function.arguments;
                       toolCallBuffer += argFragment;
+
+                      // Stream parameter updates for current tool call
+                      if (!suppressAssistantDelta && currentToolCall) {
+                        this.onProgress?.('tool_param_delta', {
+                          toolId: currentToolCall.id,
+                          partialArguments: toolCallBuffer
+                        });
+                      }
                     }
                     
                     if (tc.function?.name && currentToolCall && currentToolCall.function) {
@@ -772,9 +849,14 @@ export class Orchestrator {
   }
   
   /**
-   * Get available tools
+   * Get available tools (filtered by chat mode)
    */
   private getAvailableTools(): ToolDefinition[] {
+    if (this.chatMode) {
+      // Chat mode: only shell tool (read-only commands)
+      return [SHELL_TOOL_DEF];
+    }
+    // Code mode: all tools
     return [SHELL_TOOL_DEF, JSON_PATCH_TOOL_DEF, EVALUATION_TOOL_DEF];
   }
   
@@ -787,6 +869,8 @@ export class Orchestrator {
     // Reset state for new execution
     this.evaluationRequested = false;
     this.evaluationReceived = false;
+    this.globalToolIndex = 0; // Reset tool index for new user message
+    this.lastToolCallSignature = null; // Reset loop detection for new execution
 
     try {
       // Snapshot current state before running tools
@@ -803,7 +887,7 @@ export class Orchestrator {
         // Ignore errors getting file tree
       }
 
-      const systemPrompt = buildShellSystemPrompt(fileTree);
+      let systemPrompt = buildShellSystemPrompt(fileTree, this.chatMode);
 
       // Initialize conversation with system prompt if empty
       if (this.conversation.length === 0) {
@@ -844,7 +928,9 @@ export class Orchestrator {
         
         const { provider, apiKey, model } = this.getProviderConfig();
         const tools = this.getAvailableTools();
-        
+
+        // Notify UI that we're waiting for LLM response
+        this.onProgress?.('thinking', {});
 
         // Call LLM with conversation and tools
         const response = await this.streamLLMResponse(
@@ -877,8 +963,8 @@ export class Orchestrator {
               content: response.content
             });
 
-            // If meaningful work done (3+ steps), request evaluation
-            if (this.stepsCompleted >= 3 && !this.evaluationRequested && !this.evaluationReceived) {
+            // If meaningful work done (3+ steps), request evaluation (only in code mode)
+            if (!this.chatMode && this.stepsCompleted >= 3 && !this.evaluationRequested && !this.evaluationReceived) {
               logger.debug(`[Orchestrator] Requesting evaluation after ${this.stepsCompleted} steps`);
               this.evaluationRequested = true;
               this.conversation.push({
@@ -911,6 +997,13 @@ export class Orchestrator {
               this.noToolCallRetries++;
               logger.debug(`[Orchestrator] No progress made, retry ${this.noToolCallRetries}/2`);
               if (this.noToolCallRetries <= 2) {
+                // Notify UI about retry
+                this.onProgress?.('retry', {
+                  reason: 'No progress made, prompting for action',
+                  attempt: this.noToolCallRetries,
+                  maxAttempts: 2
+                });
+
                 this.conversation.push({
                   role: 'user',
                   content: 'Please proceed with the implementation using the shell tool.'
@@ -920,19 +1013,21 @@ export class Orchestrator {
             }
           }
 
-          // No text response or simple task with retries exhausted
-          this.noToolCallRetries++;
-          logger.debug(`[Orchestrator] No tool calls, retry ${this.noToolCallRetries}/3`);
-          if (this.noToolCallRetries <= 3) {
+          // No tool calls - request evaluation to check if task is complete (only in code mode)
+          if (!this.chatMode && !this.evaluationRequested && !this.evaluationReceived) {
+            // Request evaluation regardless of steps - let evaluation tool assess completion
+            logger.debug(`[Orchestrator] No tool calls after ${this.stepsCompleted} steps, requesting evaluation`);
+            this.evaluationRequested = true;
             this.conversation.push({
               role: 'user',
-              content: 'Continue with the task. If you need to perform more operations, use the available tools.'
+              content: 'Please use the evaluation tool to assess if the task has been completed successfully. Include progress_summary, remaining_work, and any blockers.'
             });
             continue;
-          } else {
-            logger.info(`[Orchestrator] Breaking: no tool calls and max retries reached. Steps completed: ${this.stepsCompleted}`);
-            break;
           }
+
+          // Evaluation already requested but not received - break
+          logger.info(`[Orchestrator] Breaking: evaluation requested but no response. Steps completed: ${this.stepsCompleted}`);
+          break;
         }
         
         // Notify about tool calls
@@ -954,6 +1049,13 @@ export class Orchestrator {
             this.malformedToolCallRetries++;
             logger.debug(`[Orchestrator] Malformed tool call, retry ${this.malformedToolCallRetries}/2`);
             if (this.malformedToolCallRetries <= 2) {
+              // Notify UI about retry
+              this.onProgress?.('retry', {
+                reason: 'Malformed JSON in tool call',
+                attempt: this.malformedToolCallRetries,
+                maxAttempts: 2
+              });
+
               // Add error feedback to conversation
               this.conversation.push({
                 role: 'user',
@@ -1034,15 +1136,25 @@ export class Orchestrator {
     } catch (error) {
       logger.error('Orchestrator error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      // Log full error details for debugging
+      logger.error('Full orchestrator error details:', {
+        message: errorMessage,
+        stack: errorStack,
+        stepsCompleted: this.stepsCompleted,
+        chatMode: this.chatMode
+      });
+
       try {
         await this.recordAutoCheckpoint(`After failure: ${userPrompt.substring(0, 60)}`);
       } catch (checkpointError) {
         logger.warn('Failed to record checkpoint after error', checkpointError);
       }
-      
+
       return {
         success: false,
-        summary: `Task failed: ${errorMessage}`,
+        summary: `Error: ${errorMessage}`,
         stepsCompleted: this.stepsCompleted,
         checkpointId: this.lastCheckpointId ?? undefined,
         conversation: this.conversation,
@@ -1053,11 +1165,38 @@ export class Orchestrator {
   }
   
   /**
+   * Generate a normalized signature for a tool call to detect duplicates
+   */
+  private getToolCallSignature(toolCall: ToolCall): string {
+    const toolName = toolCall.function?.name || 'unknown';
+
+    try {
+      const args = JSON.parse(toolCall.function.arguments);
+
+      // Normalize the arguments for comparison
+      if (toolName === 'shell') {
+        // Normalize cmd to string format for consistent comparison
+        const cmd = Array.isArray(args.cmd)
+          ? args.cmd.join(' ')
+          : String(args.cmd || '');
+        return `shell:${cmd}`;
+      }
+
+      // For other tools, use JSON string of sorted keys
+      const sortedArgs = JSON.stringify(args, Object.keys(args).sort());
+      return `${toolName}:${sortedArgs}`;
+    } catch {
+      // If we can't parse arguments, use raw arguments string
+      return `${toolName}:${toolCall.function.arguments}`;
+    }
+  }
+
+  /**
    * Execute tool calls and update progress
    */
   private async executeToolCalls(toolCalls: ToolCall[], iteration: number): Promise<OrchestratorMessage[]> {
     const toolResults: OrchestratorMessage[] = [];
-    
+
     for (let i = 0; i < toolCalls.length; i++) {
       // Check if generation was stopped
       if (this.stopped) {
@@ -1068,11 +1207,58 @@ export class Orchestrator {
       const toolCall = toolCalls[i];
       const toolName = toolCall.function?.name;
       const toolId = toolCall.id;
-      
+
+      // Use global tool index that accumulates across all LLM calls in this execution
+      const currentToolIndex = this.globalToolIndex;
+      this.globalToolIndex++;
+
+      // Check for consecutive duplicate tool calls (loop detection)
+      const currentSignature = this.getToolCallSignature(toolCall);
+      if (this.lastToolCallSignature === currentSignature) {
+        // Loop detected - inject intervention message
+        logger.warn(`[Orchestrator] Loop detected: consecutive duplicate tool call - ${currentSignature}`);
+
+        const interventionMessage = `❌ Loop detected: You just called this exact same command twice in a row.
+
+This suggests you may be stuck. The previous call likely failed or didn't produce the expected result.
+
+🔄 Last call: ${toolName} with parameters ${toolCall.function.arguments.substring(0, 200)}${toolCall.function.arguments.length > 200 ? '...' : ''}
+
+💡 Suggestions:
+• If the command failed with an error, try a completely different approach
+• For regex errors: use simpler patterns or try a different tool (e.g., cat + analyze)
+• For file operations: verify the file/path exists first
+• For search operations: try broader search terms or different search methods
+
+Please try a different approach instead of repeating the same command.`;
+
+        toolResults.push({
+          role: 'tool',
+          tool_call_id: toolId,
+          content: interventionMessage
+        });
+
+        // Update tool status to failed
+        this.onProgress?.('tool_status', {
+          toolIndex: currentToolIndex,
+          status: 'failed',
+          error: 'Loop detected - duplicate tool call'
+        });
+
+        // Reset tracking so next call is fresh
+        this.lastToolCallSignature = null;
+
+        // Skip executing this duplicate call
+        continue;
+      }
+
+      // Update last tool call signature
+      this.lastToolCallSignature = currentSignature;
+
       // Update tool status to executing
-      this.onProgress?.('tool_status', { 
-        toolIndex: i, 
-        status: 'executing' 
+      this.onProgress?.('tool_status', {
+        toolIndex: currentToolIndex,
+        status: 'executing'
       });
       
       if (toolName === 'shell') {
@@ -1142,16 +1328,16 @@ Examples:
           const isFailure = result.startsWith('❌');
           
           // Update tool status
-          this.onProgress?.('tool_status', { 
-            toolIndex: i, 
+          this.onProgress?.('tool_status', {
+            toolIndex: currentToolIndex,
             status: isFailure ? 'failed' : 'completed',
             result: result
           });
-          
+
           // Send tool result as progress event
-          logger.debug(`[Orchestrator] Sending tool result for tool ${i}`, { resultPreview: result.substring(0, 100) });
+          logger.debug(`[Orchestrator] Sending tool result for tool ${currentToolIndex}`, { resultPreview: result.substring(0, 100) });
           this.onProgress?.('tool_result', {
-            toolIndex: i,
+            toolIndex: currentToolIndex,
             toolId: toolId,
             result: result
           });
@@ -1182,8 +1368,8 @@ Examples:
           });
           
           // Update tool status to failed
-          this.onProgress?.('tool_status', { 
-            toolIndex: i, 
+          this.onProgress?.('tool_status', {
+            toolIndex: currentToolIndex,
             status: 'failed',
             error: errorMessage
           });
@@ -1215,15 +1401,15 @@ Examples:
           this.stepsCompleted++;
           
           // Update tool status
-          this.onProgress?.('tool_status', { 
-            toolIndex: i, 
+          this.onProgress?.('tool_status', {
+            toolIndex: currentToolIndex, 
             status: result.applied ? 'completed' : 'failed',
             result: resultMessage
           });
           
           // Send tool result to UI
           this.onProgress?.('tool_result', {
-            toolIndex: i,
+            toolIndex: currentToolIndex,
             toolId: toolId,
             result: resultMessage
           });
@@ -1243,8 +1429,8 @@ Examples:
           });
           
           // Update tool status to failed
-          this.onProgress?.('tool_status', { 
-            toolIndex: i, 
+          this.onProgress?.('tool_status', {
+            toolIndex: currentToolIndex,
             status: 'failed',
             error: errorMessage
           });
@@ -1283,11 +1469,11 @@ Examples:
 
           // Update tool status to completed
           this.onProgress?.('tool_status', {
-            toolIndex: i,
+            toolIndex: currentToolIndex,
             status: 'completed',
             result: JSON.stringify(args)
           });
-          
+
         } catch (error) {
           const parseError = error instanceof Error ? error.message : String(error);
           const errorMessage = `Error parsing evaluation: ${parseError}
@@ -1320,7 +1506,7 @@ Optional field:
 
           // Update tool status to failed
           this.onProgress?.('tool_status', {
-            toolIndex: i,
+            toolIndex: currentToolIndex,
             status: 'failed',
             error: errorMessage
           });
@@ -1351,8 +1537,8 @@ Common mistakes:
         });
         
         // Update tool status to failed
-        this.onProgress?.('tool_status', { 
-          toolIndex: i, 
+        this.onProgress?.('tool_status', {
+          toolIndex: currentToolIndex, 
           status: 'failed',
           error: errorMessage
         });
@@ -1378,6 +1564,15 @@ Common mistakes:
    * Execute shell command
    */
   private async executeShellCommand(cmd: string[]): Promise<string> {
+    // Block write operations in chat mode
+    if (this.chatMode && cmd.length > 0 && this.isWriteOperation(cmd)) {
+      return `Error: Write operations are disabled in chat mode. "${cmd[0]}" is not allowed.
+
+Switch to CODE mode to make file changes.
+
+Read-only commands available: ls, tree, cat, head, tail, grep, rg, find`;
+    }
+
     try {
       const result = await vfsShell.execute(this.projectId, cmd);
       
@@ -1446,9 +1641,9 @@ ${output}`;
    */
   private isFileStructureOperation(cmd: string[]): boolean {
     if (!cmd || cmd.length === 0) return false;
-    
+
     // Commands that change file structure (names, locations, create/delete)
-    const structureCommands = ['mv', 'rm', 'rmdir', 'cp', 'mkdir'];
+    const structureCommands = ['mv', 'rm', 'rmdir', 'cp', 'mkdir', 'touch', 'echo'];
     return structureCommands.includes(cmd[0]);
   }
   
@@ -1562,20 +1757,42 @@ ${output}`;
    */
   private generateSummary(): string {
     if (this.evaluationResult) {
-      let summary = this.evaluationResult.reasoning;
+      let summary = '';
 
+      // Use the last substantial assistant message as the summary
+      const assistantContents: string[] = [];
+      for (const msg of this.conversation) {
+        if (msg.role === 'assistant' && msg.content && msg.content.trim().length > 50) {
+          assistantContents.push(msg.content.trim());
+        }
+      }
+
+      if (assistantContents.length > 0) {
+        summary = assistantContents[assistantContents.length - 1];
+      } else {
+        summary = this.evaluationResult.reasoning;
+      }
+
+      // Append evaluation status
       if (this.evaluationResult.goalAchieved) {
-        summary += '\n\n✅ Task Complete';
+        // Only add "Task Complete" if it's not already mentioned in the summary
+        if (!summary.toLowerCase().includes('task complete') &&
+            !summary.toLowerCase().includes('completed successfully')) {
+          summary += '\n\n✅ Task Complete';
+        }
 
-        // Add created files summary
+        // Add created files summary if not already in the content
         const createdFiles = this.getCreatedFilesInSession();
-        if (createdFiles.length > 0) {
+        if (createdFiles.length > 0 && !summary.includes('Created/modified files:')) {
           summary += '\n\nCreated/modified files:';
           createdFiles.forEach(file => summary += `\n• ${file}`);
         }
 
-        // Add next steps suggestion
-        summary += '\n\nNext steps: Open the preview to test the application.';
+        // Add next steps suggestion if not already mentioned
+        if (!summary.toLowerCase().includes('next steps') &&
+            !summary.toLowerCase().includes('open the preview')) {
+          summary += '\n\nNext steps: Open the preview to test the application.';
+        }
       } else {
         summary += '\n\n⚠️ Task Incomplete';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { VirtualServer } from '@/lib/preview/virtual-server';
 import { 
   CompiledProject, 
@@ -43,13 +43,13 @@ const DEVICE_SIZES: Record<DeviceSize, { width?: string; height?: string; maxHei
   responsive: { width: '100%', height: '100%' }
 };
 
-export function MultipagePreview({ 
-  projectId, 
+const MultipagePreviewComponent = ({
+  projectId,
   refreshTrigger,
   onFocusSelection,
   hasFocusTarget = false,
   onClose
-}: MultipagePreviewProps) {
+}: MultipagePreviewProps) => {
   const [compiledProject, setCompiledProject] = useState<CompiledProject | null>(null);
   const [activePath, setActivePath] = useState('/');
   const [loading, setLoading] = useState(true);
@@ -59,11 +59,15 @@ export function MultipagePreview({
   const [historyIndex, setHistoryIndex] = useState(0);
   const [iframeReady, setIframeReady] = useState(false);
   const [selectorActive, setSelectorActive] = useState(false);
-  const crosshairButtonStyle = selectorActive
-    ? { backgroundColor: 'var(--button-preview-active)', color: 'white' }
-    : hasFocusTarget
-      ? { backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--button-preview-active)' }
-      : {};
+  const crosshairButtonStyle = useMemo(() => {
+    if (selectorActive) {
+      return { backgroundColor: 'var(--button-preview-active)', color: 'white' };
+    }
+    if (hasFocusTarget) {
+      return { backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--button-preview-active)' };
+    }
+    return {};
+  }, [selectorActive, hasFocusTarget]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const serverRef = useRef<VirtualServer | null>(null);
   const compiledProjectRef = useRef<CompiledProject | null>(null);
@@ -971,4 +975,6 @@ export function MultipagePreview({
       </div>
     </div>
   );
-}
+};
+
+export const MultipagePreview = React.memo(MultipagePreviewComponent);

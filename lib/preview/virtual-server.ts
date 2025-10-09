@@ -307,7 +307,7 @@ export class VirtualServer {
     // Always inject the interceptor, even if no blob URLs yet (for future dynamic loading)
     const blobUrlMap = blobUrls ? Object.fromEntries(blobUrls) : {};
     const vfsScript = `<script>
-// VFS Asset Interceptor - Auto-injected by DeepStudio
+// VFS Asset Interceptor - Auto-injected by OSW Studio
 (function() {
   const vfsBlobUrls = ${JSON.stringify(blobUrlMap)};
   
@@ -515,10 +515,37 @@ export class VirtualServer {
     };
   }
   
+  private extractPartialReferences(content: string): string[] {
+    // Match {{> partialName}} or {{>partialName}} syntax
+    const partialRegex = /\{\{>\s*([\w-]+)\s*(?:\s+[^}]*)?\}\}/g;
+    const partials = new Set<string>();
+    let match;
+
+    while ((match = partialRegex.exec(content)) !== null) {
+      partials.add(match[1]);
+    }
+
+    return Array.from(partials);
+  }
+
+  private registerErrorStubsForMissingPartials(partialRefs: string[]): void {
+    for (const partialName of partialRefs) {
+      // Check if partial is already registered
+      if (!this.handlebars.partials[partialName]) {
+        // Register error stub for missing partial
+        const errorStub = `<div style="border: 2px solid #f99; background: #fee; padding: 1rem; margin: 1rem 0; border-radius: 4px; font-family: monospace;">
+  <strong style="color: #c33;">⚠️ Missing partial: "${partialName}"</strong>
+  <p style="margin: 0.5rem 0 0 0; font-size: 0.9em;">Check /templates/${partialName}.hbs exists</p>
+</div>`;
+        this.handlebars.registerPartial(partialName, errorStub);
+      }
+    }
+  }
+
   private async processHandlebarsTemplates(content: string): Promise<string> {
     // Ensure partials are registered
     await this.registerPartials();
-    
+
     try {
       // Check for common invalid LLM-generated patterns before compilation
       const invalidPatterns = this.detectInvalidHandlebarsPatterns(content);
@@ -526,6 +553,10 @@ export class VirtualServer {
         const errorMessages = invalidPatterns.map(pattern => `❌ ${pattern.error}\n💡 ${pattern.suggestion}`).join('\n\n');
         return `<!-- Handlebars Syntax Error -->\n<div style="background: #fee; border: 1px solid #f99; padding: 1rem; margin: 1rem; border-radius: 4px; font-family: monospace;">\n<h3 style="color: #c33; margin: 0 0 1rem 0;">⚠️ Handlebars Template Error</h3>\n<pre style="margin: 0; white-space: pre-wrap;">${errorMessages}</pre>\n</div>\n<!-- Original content:\n${content}\n-->`;
       }
+
+      // Extract partial references and register error stubs for missing ones
+      const partialRefs = this.extractPartialReferences(content);
+      this.registerErrorStubsForMissingPartials(partialRefs);
 
       // Look for a data.json file for template context
       let context = {};
@@ -535,14 +566,14 @@ export class VirtualServer {
       } catch {
         // No data file, use empty context
       }
-      
+
       // Compile the content as a Handlebars template
       const template = this.handlebars.compile(content);
       const result = template(context);
       return result;
     } catch (error) {
       console.error('VirtualServer: Error processing Handlebars templates:', error);
-      
+
       // Return a helpful error message instead of original content
       const errorMessage = error instanceof Error ? error.message : String(error);
       return `<!-- Handlebars Compilation Error -->\n<div style="background: #fee; border: 1px solid #f99; padding: 1rem; margin: 1rem; border-radius: 4px; font-family: monospace;">\n<h3 style="color: #c33; margin: 0 0 1rem 0;">⚠️ Handlebars Template Error</h3>\n<p><strong>Error:</strong> ${errorMessage}</p>\n<p><strong>Common fixes:</strong></p>\n<ul>\n<li>Check for typos in helper names and partial references</li>\n<li>Ensure all opening tags have matching closing tags</li>\n<li>Verify partial names exist in /templates/ directory</li>\n<li>Use <code>{{> partialName}}</code> syntax, not <code>(> partialName)</code></li>\n</ul>\n</div>\n<!-- Original content:\n${content}\n-->`;

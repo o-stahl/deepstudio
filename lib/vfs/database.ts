@@ -1,6 +1,6 @@
 import { Project, VirtualFile, FileTreeNode } from './types';
 
-const DB_NAME = 'deepstudio-vfs';
+const DB_NAME = 'osw-studio-db';
 const DB_VERSION = 1;
 
 export class VFSDatabase {
@@ -19,6 +19,7 @@ export class VFSDatabase {
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
 
+        // VFS object stores
         if (!db.objectStoreNames.contains('projects')) {
           const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
           projectStore.createIndex('name', 'name', { unique: false });
@@ -38,6 +39,20 @@ export class VFSDatabase {
           treeStore.createIndex('path', ['projectId', 'path'], { unique: true });
           treeStore.createIndex('parentPath', ['projectId', 'parentPath'], { unique: false });
         }
+
+        // Conversations object store
+        if (!db.objectStoreNames.contains('conversations')) {
+          const conversationStore = db.createObjectStore('conversations', { keyPath: 'id' });
+          conversationStore.createIndex('projectId', 'projectId', { unique: false });
+          conversationStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
+        }
+
+        // Checkpoints object store
+        if (!db.objectStoreNames.contains('checkpoints')) {
+          const checkpointStore = db.createObjectStore('checkpoints', { keyPath: 'id' });
+          checkpointStore.createIndex('projectId', 'projectId', { unique: false });
+          checkpointStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
       };
     });
   }
@@ -47,6 +62,11 @@ export class VFSDatabase {
       throw new Error('Database not initialized. Call init() first.');
     }
     return this.db;
+  }
+
+  // Public getter for shared database access (used by checkpoint and conversation managers)
+  getDatabase(): IDBDatabase {
+    return this.getDB();
   }
 
   async createProject(project: Project): Promise<void> {

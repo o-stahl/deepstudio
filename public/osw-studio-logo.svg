@@ -1,19 +1,12 @@
-'use client';
+<?xml version="1.0" standalone="no"?>
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+ width="256" height="256" viewBox="0 0 256 256"
+ preserveAspectRatio="xMidYMid meet">
 
-interface LogoProps {
-  width?: number;
-  height?: number;
-  className?: string;
-}
-
-export function Logo({ width = 64, height = 64, className }: LogoProps) {
-  return (
-    <div
-      style={{ width, height }}
-      className={className}
-      dangerouslySetInnerHTML={{
-        __html: `<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 256 256" preserveAspectRatio="xMidYMid meet">
+<!-- Black rounded square background filling entire canvas -->
 <rect x="0" y="0" width="256" height="256" rx="20" ry="20" fill="#000000"/>
+
+<!-- White letters -->
 <g transform="translate(0,256) scale(0.0476,-0.0476)" fill="#ffffff" stroke="none">
 <path d="M725 4825 c-50 -18 -100 -71 -114 -122 -15 -54 -15 -1573 0 -1628 16
 -55 44 -92 89 -115 38 -19 62 -20 855 -20 781 0 817 1 853 19 46 23 67 46 87
@@ -50,8 +43,4 @@ export function Logo({ width = 64, height = 64, className }: LogoProps) {
 691 22 606 1 658 2 688 19 137 74 130 264 -12 328 -38 18 -85 19 -840 18 -652
 0 -807 -2 -838 -14z"/>
 </g>
-</svg>`
-      }}
-    />
-  );
-}
+</svg>

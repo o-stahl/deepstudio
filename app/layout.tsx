@@ -18,40 +18,40 @@ const ptSans = PT_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "DeepStudio | Agentic AI Development 🎨",
+  title: "Open Source Web Studio | Agentic AI Development 🎨",
   description:
-    "DeepStudio is an AI-powered development environment that enables autonomous multi-file development through intelligent tool usage. Build complete applications with natural language.",
+    "Open Source Web Studio is an AI-powered development environment that enables autonomous multi-file development through intelligent tool usage. Build complete applications with natural language.",
   openGraph: {
-    title: "DeepStudio | Agentic AI Development 🎨",
+    title: "Open Source Web Studio | Agentic AI Development 🎨",
     description:
-      "DeepStudio is an AI-powered development environment that enables autonomous multi-file development through intelligent tool usage. Build complete applications with natural language.",
-    url: "https://huggingface.co/spaces/otst/deepstudio",
-    siteName: "DeepStudio",
+      "Open Source Web Studio is an AI-powered development environment that enables autonomous multi-file development through intelligent tool usage. Build complete applications with natural language.",
+    url: "https://huggingface.co/spaces/otst/osw-studio",
+    siteName: "Open Source Web Studio",
     images: [
       {
-        url: "https://huggingface.co/spaces/otst/deepstudio/resolve/main/banner.png",
+        url: "https://huggingface.co/spaces/otst/osw-studio/resolve/main/banner.png",
         width: 1200,
         height: 630,
-        alt: "DeepStudio Open Graph Image",
+        alt: "Open Source Web Studio - Agentic AI Development",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "DeepStudio | Agentic AI Development 🎨",
+    title: "OSW-Studio | Agentic AI Development 🎨",
     description:
-      "DeepStudio is an AI-powered development environment that enables autonomous multi-file development through intelligent tool usage. Build complete applications with natural language.",
-    images: ["https://huggingface.co/spaces/otst/deepstudio/resolve/main/banner.png"],
+      "OSW-Studio is an AI-powered development environment that enables autonomous multi-file development through intelligent tool usage. Build complete applications with natural language.",
+    images: ["https://huggingface.co/spaces/otst/osw-studio/resolve/main/banner.png"],
   },
   appleWebApp: {
     capable: true,
-    title: "DeepStudio",
+    title: "OSW-Studio",
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: "/deepstudio-logo-dark.svg",
-    shortcut: "/deepstudio-logo-dark.svg",
-    apple: "/deepstudio-logo-dark.svg",
+    icon: "/osw-studio-logo.svg",
+    shortcut: "/osw-studio-logo.svg",
+    apple: "/osw-studio-logo.svg",
   },
 };
 

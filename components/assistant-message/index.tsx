@@ -28,7 +28,7 @@ interface ToolCall {
 
 type ToolMessageItem = {
   id: string;
-  type: 'message' | 'tool' | 'divider';
+  type: 'message' | 'tool' | 'divider' | 'thinking';
   content?: string;
   name?: string;
   parameters?: any;
@@ -138,6 +138,23 @@ export function AssistantMessage({
     </div>
   ) : null;
 
+  // Show "Thinking..." when message is empty (waiting for LLM response)
+  const isEmpty = !hasContent && (!toolMessages || toolMessages.length === 0);
+  if (isEmpty && !checkpointId) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        <div className="bg-muted/30 rounded-md p-2 opacity-70">
+          <div className="flex items-center gap-2 px-1">
+            <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+            <span className="text-xs text-muted-foreground">
+              Thinking...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (toolMessages && toolMessages.length > 0) {
     return (
       <div className={cn("space-y-2", className)}>
@@ -189,13 +206,65 @@ export function AssistantMessage({
         )}
         
         {toolMessages.map((item) => {
-          if (item.type === 'message') {
+          if (item.type === 'thinking') {
+            return (
+              <div key={item.id} className="bg-muted/30 rounded-md p-2 opacity-70">
+                <div className="flex items-center gap-2 px-1">
+                  <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                  <span className="text-xs text-muted-foreground">
+                    Thinking...
+                  </span>
+                </div>
+              </div>
+            );
+          } else if (item.type === 'message') {
             return (
               <div key={item.id} className="text-sm text-foreground/90 bg-muted/20 px-3 py-2 rounded">
                 <MarkdownRenderer content={item.content || ''} />
               </div>
             );
           } else if (item.type === 'divider') {
+            const isRetry = item.title?.startsWith('⚠️');
+            const isError = item.subtitle === 'Error';
+
+            // Error notifications: red/destructive style
+            if (isError) {
+              return (
+                <div key={item.id} className="bg-destructive/10 border border-destructive/20 rounded-md p-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-destructive">
+                        Error: {item.title}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Retry notifications: subtle tool-card style
+            if (isRetry) {
+              // Extract retry info from title like "⚠️ Reason (Retry 2/3)"
+              const match = item.title?.match(/⚠️\s*(.+?)\s*\(Retry\s+(\d+)\/(\d+)\)/i);
+              const reason = match?.[1] || 'Retrying';
+              const attempt = match?.[2] || '?';
+              const maxAttempts = match?.[3] || '?';
+
+              return (
+                <div key={item.id} className="bg-muted/30 rounded-md p-1.5 opacity-70">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="flex items-center gap-1.5">
+                      <RotateCcw className="h-3 w-3 text-blue-400" />
+                      <span className="text-xs text-muted-foreground">
+                        Retry {attempt}/{maxAttempts}: {reason.toLowerCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Regular dividers: keep original style
             return (
               <div key={item.id} className="flex items-center gap-2 my-2">
                 <div className="flex-1 h-px bg-border" />
@@ -212,6 +281,7 @@ export function AssistantMessage({
                 key={tool.id}
                 className={cn(
                   "bg-muted/30 rounded-md transition-all",
+                  tool.status === 'executing' && "ring-2 ring-blue-500/20 animate-pulse",
                   expandedTools.has(tool.id) ? "p-2" : "p-1.5"
                 )}
               >
@@ -221,10 +291,16 @@ export function AssistantMessage({
                 >
                   <div className="flex items-center gap-1.5">
                     {tool.name === 'evaluation' ? (
-                      tool.parameters?.goal_achieved ? (
-                        <CheckCircle className="h-3 w-3 text-green-500" />
+                      // Only show result icon if tool is completed
+                      tool.status === 'completed' ? (
+                        tool.parameters?.goal_achieved ? (
+                          <CheckCircle className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <XCircle className="h-3 w-3 text-red-500" />
+                        )
                       ) : (
-                        <XCircle className="h-3 w-3 text-red-500" />
+                        // Show spinner while pending/executing
+                        statusIcons[tool.status || 'pending']
                       )
                     ) : (
                       (tool.name && toolIcons[tool.name === '' ? (tool.parameters?.tool || tool.name) : tool.name]) || <ChevronRight className="h-3 w-3" />
@@ -251,6 +327,10 @@ export function AssistantMessage({
                           return JSON.stringify(cmd).substring(0, 50);
                         }
                       })()}
+                    </code>
+                  ) : tool.parameters?._partial ? (
+                    <code className="text-xs text-muted-foreground italic opacity-70">
+                      {tool.parameters._partial.substring(0, 50)}{tool.parameters._partial.length > 50 ? '...' : ''}
                     </code>
                   ) : (tool.parameters?.path || tool.parameters?.file_path) && (
                     <code className="text-xs text-muted-foreground">
@@ -281,31 +361,39 @@ export function AssistantMessage({
                 
                 {tool.name === 'evaluation' && tool.parameters && (
                   <div className="px-2 py-1 mt-1 space-y-2">
-                    {/* Reasoning - prominently displayed first */}
-                    <div className="text-xs text-muted-foreground">
-                      {tool.parameters.reasoning}
-                    </div>
-                    
-                    {/* Status indicators */}
-                    <div className="flex items-center gap-3 text-xs">
-                      <div className="flex items-center gap-1">
-                        {tool.parameters.goal_achieved ? (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <XCircle className="h-3 w-3 text-red-500" />
-                        )}
-                        <span className={tool.parameters.goal_achieved ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                          {tool.parameters.goal_achieved ? "Goal achieved" : "Goal not achieved"}
-                        </span>
-                      </div>
-                      
-                      {!tool.parameters.should_continue && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <span>•</span>
-                          <span>Stopping</span>
+                    {tool.status === 'completed' ? (
+                      <>
+                        {/* Reasoning - prominently displayed first */}
+                        <div className="text-xs text-muted-foreground">
+                          {tool.parameters.reasoning}
                         </div>
-                      )}
-                    </div>
+
+                        {/* Status indicators */}
+                        <div className="flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-1">
+                            {tool.parameters.goal_achieved ? (
+                              <CheckCircle className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-red-500" />
+                            )}
+                            <span className={tool.parameters.goal_achieved ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                              {tool.parameters.goal_achieved ? "Goal achieved" : "Goal not achieved"}
+                            </span>
+                          </div>
+
+                          {!tool.parameters.should_continue && (
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <span>•</span>
+                              <span>Stopping</span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-muted-foreground italic">
+                        Evaluating task completion...
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -415,6 +503,7 @@ export function AssistantMessage({
               key={index}
               className={cn(
                 "bg-muted/30 rounded-md transition-all",
+                tool.status === 'executing' && "ring-2 ring-blue-500/20 animate-pulse",
                 expandedTools.has(String(index)) ? "p-2" : "p-1.5"
               )}
             >
@@ -424,10 +513,16 @@ export function AssistantMessage({
               >
                 <div className="flex items-center gap-1.5">
                   {tool.name === 'evaluation' ? (
-                    tool.parameters?.goal_achieved ? (
-                      <CheckCircle className="h-3 w-3 text-green-500" />
+                    // Only show result icon if tool is completed
+                    tool.status === 'completed' ? (
+                      tool.parameters?.goal_achieved ? (
+                        <CheckCircle className="h-3 w-3 text-green-500" />
+                      ) : (
+                        <XCircle className="h-3 w-3 text-red-500" />
+                      )
                     ) : (
-                      <XCircle className="h-3 w-3 text-red-500" />
+                      // Show spinner while pending/executing
+                      statusIcons[tool.status || 'pending']
                     )
                   ) : (
                     (tool.name && toolIcons[tool.name === '' ? (tool.parameters?.tool || tool.name) : tool.name]) || <ChevronRight className="h-3 w-3" />
@@ -455,6 +550,10 @@ export function AssistantMessage({
                         return JSON.stringify(cmd).substring(0, 50);
                       }
                     })()}
+                  </code>
+                ) : tool.parameters?._partial ? (
+                  <code className="text-xs text-muted-foreground italic opacity-70">
+                    {tool.parameters._partial.substring(0, 50)}{tool.parameters._partial.length > 50 ? '...' : ''}
                   </code>
                 ) : (tool.parameters?.path || tool.parameters?.file_path) && (
                   <code className="text-xs text-muted-foreground">

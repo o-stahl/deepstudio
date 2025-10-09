@@ -1,5 +1,48 @@
 # Changelog
 
+## v1.12.0 - 2025-10-04
+- Switch between read-only exploration (Chat) and full coding mode (Code)
+- Chat mode: Read-only commands for codebase exploration and planning
+- Code mode: Full file modification capabilities with json_patch and evaluation tools
+- Write commands (touch, echo >, mkdir, rm, mv, cp) blocked in chat mode with helpful error messages
+- Optional separate model selection per mode for cost optimization (e.g., use cheaper models for chat/planning)
+- Mode state persists across sessions
+- Renamed from DeepStudio to Open Source Web Studio (OSW Studio)
+- Updated all UI text, database names, storage keys, and API headers
+- Maintained full backward compatibility with DeepStudio .osws backup files
+- Integrated new OSW Studio logo with theme-aware SVG (automatic light/dark mode support)
+- Added outlined favicon design for visibility on all backgrounds
+- Established brand naming convention: "Open Source Web Studio" (full), "OSW Studio" (short)
+- Consolidated IndexedDB architecture from 3 separate databases to 1 unified database
+- Atomic transactions now possible across all data types (projects, files, conversations, checkpoints)
+- Improved import/export performance with single database connection
+- Fixed backup import hanging issues with proper timeout handling and blocked connection detection
+- Added DeepStudio → OSW Studio migration support via backup import
+- Enhanced error handling and logging for all database operations
+- Enhanced error handling: API errors now show toast notifications and remove thinking indicator
+- Error messages persist in chat history with visual styling for easy troubleshooting
+- Mobile save button indicator in workspace header appears when unsaved changes exist
+- Added "Thinking..." indicator for LLM response wait times
+- Early tool call visibility with streaming parameter updates
+- Fixed chat auto-scroll during streaming (instant scroll instead of competing animations)
+- Fixed preview button flashing during streaming (memoized component and callbacks)
+- Subtle retry notifications
+- Fixed double JSON encoding in API error responses for cleaner error messages
+- Fixed 'echo' and 'touch' commands missing from structural commands for file explorer refresh
+- Fixed evaluation tool showing premature status
+- Fixed project name input validation
+- Fixed metadata URLs (oswstudio → osw-studio) in layout and CLAUDE.md
+- Added finish_reason handling for OpenRouter streaming
+- Request evaluation when tool calls stop instead of blind retries
+- Added runtime validation for tool definitions to prevent malformed tools
+- Added loop detection: prevents LLM from repeating the same failing command consecutively
+- Added progressive Handlebars rendering: missing partials show inline error stubs instead of failing entire page
+- Codebase cleanup: removed 8 unused files and 9 unused dependencies
+- Removed tw-animate-css dependency (Tailwind v4 includes built-in animations)
+- Removed DeepStudio logo files (deepstudio-logo-dark.svg, app/favicon.ico)
+- Updated demo template and GitHub repository links
+- Updated theme storage and cost settings event naming
+
 ## v1.11.0 - 2025-02-03
 - Enhanced evaluation tool with goal-oriented progress tracking (progress_summary, remaining_work, blockers)
 - Improved orchestrator loop to properly enforce evaluation after meaningful work (3+ steps)

@@ -38,12 +38,10 @@ interface CreateCheckpointOptions {
   replaceId?: string | null;
 }
 
-export class CheckpointManager {
+class CheckpointManager {
   private checkpoints: Map<string, Checkpoint> = new Map();
   private currentCheckpoint: string | null = null;
-  private dbName = 'DeepStudioCheckpoints';
   private storeName = 'checkpoints';
-  private db: IDBDatabase | null = null;
   private isInitialized = false;
 
   /**
@@ -71,51 +69,38 @@ export class CheckpointManager {
   }
   
   /**
-   * Initialize the IndexedDB database
+   * Initialize by ensuring VFS database is ready
    */
   private async initDB(): Promise<void> {
     if (this.isInitialized) return;
-    
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 1);
-      
-      request.onerror = () => {
-        logger.error('Failed to open checkpoint database');
-        reject(request.error);
-      };
-      
-      request.onsuccess = () => {
-        this.db = request.result;
-        this.isInitialized = true;
-        this.loadCheckpointsFromDB().then(() => resolve());
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
-          store.createIndex('projectId', 'projectId', { unique: false });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-        }
-      };
-    });
+
+    // Initialize VFS which also initializes the shared database
+    await vfs.init();
+    this.isInitialized = true;
+    await this.loadCheckpointsFromDB();
+  }
+
+  /**
+   * Get shared database connection from VFS
+   */
+  private getDB(): IDBDatabase {
+    return (vfs as any).db.getDatabase();
   }
   
   /**
    * Load checkpoints from IndexedDB into memory
    */
   private async loadCheckpointsFromDB(): Promise<void> {
-    if (!this.db) return;
-    
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const db = this.getDB();
+      const transaction = db.transaction([this.storeName], 'readonly');
       const store = transaction.objectStore(this.storeName);
       const request = store.getAll();
-      
+
       request.onsuccess = () => {
         const storedCheckpoints = request.result as StoredCheckpoint[];
         this.checkpoints.clear();
-        
+
         for (const stored of storedCheckpoints) {
           const checkpoint: Checkpoint = {
             ...stored,
@@ -126,10 +111,10 @@ export class CheckpointManager {
           };
           this.checkpoints.set(checkpoint.id, checkpoint);
         }
-        
+
         resolve();
       };
-      
+
       request.onerror = () => {
         logger.error('Failed to load checkpoints from DB');
         reject(request.error);
@@ -142,8 +127,7 @@ export class CheckpointManager {
    */
   private async saveCheckpointToDB(checkpoint: Checkpoint): Promise<void> {
     await this.initDB();
-    if (!this.db) return;
-    
+
     const storedCheckpoint: StoredCheckpoint = {
       ...checkpoint,
       files: Array.from(checkpoint.files.entries()),
@@ -151,12 +135,13 @@ export class CheckpointManager {
       kind: checkpoint.kind,
       baseRevisionId: checkpoint.baseRevisionId ?? null
     };
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const db = this.getDB();
+      const transaction = db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.put(storedCheckpoint);
-      
+
       request.onsuccess = () => resolve();
       request.onerror = () => {
         logger.error('Failed to save checkpoint to DB');
@@ -170,13 +155,13 @@ export class CheckpointManager {
    */
   private async deleteCheckpointFromDB(checkpointId: string): Promise<void> {
     await this.initDB();
-    if (!this.db) return;
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite');
+      const db = this.getDB();
+      const transaction = db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const request = store.delete(checkpointId);
-      
+
       request.onsuccess = () => resolve();
       request.onerror = () => {
         logger.error('Failed to delete checkpoint from DB');

@@ -470,7 +470,7 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         className="w-full justify-start"
       >
         <Info className="mr-2 h-4 w-4" />
-        About DeepStudio
+        About OSW Studio
       </Button>
       
       <Button 
@@ -480,7 +480,7 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         className="w-full justify-start"
       >
         <a
-          href="https://github.com/o-stahl/deepstudio"
+          href="https://github.com/o-stahl/osw-studio"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -499,7 +499,7 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         actions={headerActions}
         mobileMenuContent={mobileMenuContent}
         desktopOnlyContent={desktopSettingsButton}
-        leftText="DeepStudio"
+        leftText="Open Source Web Studio"
       />
       
       {/* Main Content */}
@@ -635,21 +635,21 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
             <TestTube className="mr-2 h-4 w-4" />
             Model Tester
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setAboutModalOpen(true)}
           >
             <Info className="mr-2 h-4 w-4" />
-            About DeepStudio
+            About OSW Studio
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             asChild
           >
             <a
-              href="https://github.com/o-stahl/deepstudio"
+              href="https://github.com/o-stahl/osw-studio"
               target="_blank"
               rel="noopener noreferrer"
             >

@@ -134,7 +134,7 @@ export class LLMClient {
 
     if (this.provider === 'openrouter') {
       headers['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      headers['X-Title'] = 'DeepStudio';
+      headers['X-Title'] = 'OSW-Studio';
     }
 
     if (this.providerConfig.customHeaders) {
@@ -178,7 +178,7 @@ export class LLMClient {
 
     if (this.provider === 'openrouter') {
       headers['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      headers['X-Title'] = 'DeepStudio';
+      headers['X-Title'] = 'OSW-Studio';
     }
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -630,5 +630,3 @@ export class LLMClient {
     }
   }
 }
-
-export const OpenRouterClient = LLMClient;

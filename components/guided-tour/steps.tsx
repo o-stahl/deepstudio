@@ -4,7 +4,7 @@ import { GuidedTourStepContent } from './types';
 export const GUIDED_TOUR_STEPS: GuidedTourStepContent[] = [
   {
     id: 'welcome',
-    title: 'Welcome to DeepStudio',
+    title: 'Welcome to Open Source Web Studio',
     body: (
       <div className="space-y-2 text-sm text-muted-foreground">
         <p>Let's take a guided tour of the workspace so you can see how projects, agents, and saves all fit together.</p>

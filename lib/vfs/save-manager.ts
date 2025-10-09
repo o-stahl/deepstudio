@@ -7,7 +7,7 @@ interface DirtyEvent {
   dirty: boolean;
 }
 
-export class SaveManager {
+class SaveManager {
   private dirtyProjects = new Set<string>();
   private listeners = new Set<(event: DirtyEvent) => void>();
   private suppressionCounts = new Map<string, number>();

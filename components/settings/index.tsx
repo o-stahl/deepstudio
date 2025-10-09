@@ -408,7 +408,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             onClick={() => setAboutModalOpen(true)}
           >
             <Info className="mr-2 h-4 w-4" />
-            About DeepStudio
+            About OSW Studio
           </Button>
         </div>
         

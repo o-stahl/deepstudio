@@ -6,6 +6,7 @@ import { LLMClient } from '@/lib/llm/llm-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, EyeOff, Check, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModelSelector } from '@/components/model-selector';
@@ -26,13 +27,20 @@ interface ModelSettingsPanelProps {
 
 export function ModelSettingsPanel({ onClose, onModelChange }: ModelSettingsPanelProps) {
   const [_settings, setSettings] = useState<AppSettings>({});
-  const [selectedProvider, setSelectedProvider] = useState<ProviderId>(() => 
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId>(() =>
     configManager.getSelectedProvider()
   );
   const [showApiKey, setShowApiKey] = useState(false);
   const [validatingKey, setValidatingKey] = useState(false);
   const [keyValid, setKeyValid] = useState<boolean | null>(null);
   const [currentApiKey, setCurrentApiKey] = useState('');
+  const [useSeparateChatModel, setUseSeparateChatModel] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`osw-studio-use-separate-chat-model-${configManager.getSelectedProvider()}`);
+      return stored === 'true';
+    }
+    return false;
+  });
 
   useEffect(() => {
     // Load settings on mount
@@ -47,7 +55,20 @@ export function ModelSettingsPanel({ onClose, onModelChange }: ModelSettingsPane
     const key = configManager.getProviderApiKey(selectedProvider) || '';
     setCurrentApiKey(key);
     setKeyValid(null); // Reset validation
+
+    // Load separate chat model setting for this provider
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`osw-studio-use-separate-chat-model-${selectedProvider}`);
+      setUseSeparateChatModel(stored === 'true');
+    }
   }, [selectedProvider]);
+
+  // Persist separate chat model setting
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`osw-studio-use-separate-chat-model-${selectedProvider}`, String(useSeparateChatModel));
+    }
+  }, [useSeparateChatModel, selectedProvider]);
 
   const _updateSetting = <K extends keyof AppSettings>(
     key: K,
@@ -234,14 +255,59 @@ export function ModelSettingsPanel({ onClose, onModelChange }: ModelSettingsPane
           </div>
         )}
 
-        {/* Model Selection */}
-        <ModelSelector 
-          provider={selectedProvider}
-          onChange={(modelId) => {
-            onModelChange?.(modelId);
-          }}
-          className="space-y-2"
-        />
+        {/* Model Selection for Code Mode */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium">Code Mode Model</Label>
+          <ModelSelector
+            provider={selectedProvider}
+            onChange={(modelId) => {
+              if (typeof window !== 'undefined') {
+                localStorage.setItem(`osw-studio-code-model-${selectedProvider}`, modelId);
+              }
+              if (!useSeparateChatModel) {
+                onModelChange?.(modelId);
+              }
+            }}
+            className="space-y-2"
+          />
+        </div>
+
+        {/* Separate Chat Model Option */}
+        <div className="flex items-start space-x-2 pt-2">
+          <Checkbox
+            id="separate-chat-model"
+            checked={useSeparateChatModel}
+            onCheckedChange={(checked) => setUseSeparateChatModel(checked === true)}
+          />
+          <div className="grid gap-1.5 leading-none">
+            <label
+              htmlFor="separate-chat-model"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              Use different model for chat mode
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Select a separate (usually cheaper) model for chat/planning mode
+            </p>
+          </div>
+        </div>
+
+        {/* Model Selection for Chat Mode */}
+        {useSeparateChatModel && (
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm font-medium">Chat Mode Model</Label>
+            <ModelSelector
+              provider={selectedProvider}
+              onChange={(modelId) => {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(`osw-studio-chat-model-${selectedProvider}`, modelId);
+                }
+                onModelChange?.(modelId);
+              }}
+              className="space-y-2"
+            />
+          </div>
+        )}
       </div>
 
       {/* Actions */}

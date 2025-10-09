@@ -297,7 +297,7 @@ export default function TestGenerationPage() {
                 It&apos;s cheaper and easier to just use good models and research community feedback about agentic capabilities.
               </p>
               <p className="text-sm text-amber-800 dark:text-amber-200 mt-2">
-                This tester is largely for evaluating how models perform with DeepStudio&apos;s implementation 
+                This tester is largely for evaluating how models perform with OSW Studio&apos;s implementation
                 and using those results to improve the agentic system.
               </p>
             </div>

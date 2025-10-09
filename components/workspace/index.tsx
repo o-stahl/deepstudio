@@ -9,6 +9,7 @@ import { MultiTabEditor, openFileInEditor } from '@/components/editor/multi-tab-
 import { MultipagePreview } from '@/components/preview/multipage-preview';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ArrowLeft, Send, Loader2, RotateCcw, MessageSquare, FolderTree, Code2, Eye, ChevronDown, ChevronUp, Settings, Trash2, Save, Info, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { AppHeader, HeaderAction } from '@/components/ui/app-header';
@@ -51,7 +52,7 @@ import { FocusContextPayload } from '@/lib/preview/types';
 
 interface ToolMessageItem {
   id: string;
-  type: 'message' | 'tool' | 'divider';
+  type: 'message' | 'tool' | 'divider' | 'thinking';
   content?: string;
   name?: string;
   parameters?: any;
@@ -93,6 +94,17 @@ interface WorkspaceProps {
 
 type FocusTarget = FocusContextPayload & { timestamp: number };
 
+/**
+ * Helper function to safely clone a message for state updates.
+ * Deep clones toolMessages array to prevent mutation issues.
+ */
+function cloneMessageForUpdate(message: Message): Message {
+  return {
+    ...message,
+    toolMessages: (message.toolMessages || []).map(item => ({ ...item }))
+  };
+}
+
 export function Workspace({ project, onBack }: WorkspaceProps) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [prompt, setPrompt] = useState('');
@@ -104,6 +116,13 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
   const [saveInProgress, setSaveInProgress] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(project.lastSavedAt ?? null);
   const [focusContext, setFocusContext] = useState<FocusTarget | null>(null);
+  const [chatMode, setChatMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('osw-studio-chat-mode');
+      return stored ? stored === 'true' : false;
+    }
+    return false;
+  });
   const lastFocusSignatureRef = useRef<{ signature: string; timestamp: number } | null>(null);
   const currentAssistantIdx = useRef<number | null>(null);
   const idCounterRef = useRef(0);
@@ -265,6 +284,10 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
     lastFocusSignatureRef.current = { signature, timestamp: now };
   }, [describeFocusTarget]);
 
+  const handleClosePreview = useCallback(() => {
+    setShowPreview(false);
+  }, []);
+
   const focusDescriptor = focusContext ? describeFocusTarget(focusContext) : '';
   const focusPreviewSnippet = focusContext ? truncateHtmlSnippet(focusContext.outerHTML, 240) : '';
 
@@ -314,6 +337,13 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
     });
     return () => unsubscribe();
   }, [project.id]);
+
+  // Persist chat mode to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('osw-studio-chat-mode', String(chatMode));
+    }
+  }, [chatMode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -535,8 +565,10 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
   }, [tourRunning, tourStep, setWorkspaceHandler, ensureStreamingAssistant, makeId]);
 
   useEffect(() => {
-    if (isAutoScrollEnabled.current && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isAutoScrollEnabled.current && messagesContainerRef.current) {
+      // Use direct scrollTop for instant, jank-free scrolling during streaming
+      const container = messagesContainerRef.current;
+      container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
 
@@ -830,6 +862,29 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
       }
     }
 
+    // Determine which model to use based on chat mode
+    let modelToUse = configManager.getProviderModel(currentProvider) || configManager.getDefaultModel();
+    if (typeof window !== 'undefined') {
+      const useSeparateChatModel = localStorage.getItem(`osw-studio-use-separate-chat-model-${currentProvider}`) === 'true';
+      if (useSeparateChatModel) {
+        if (chatMode) {
+          // Use chat model if available
+          const chatModel = localStorage.getItem(`osw-studio-chat-model-${currentProvider}`);
+          if (chatModel) modelToUse = chatModel;
+        } else {
+          // Use code model if available
+          const codeModel = localStorage.getItem(`osw-studio-code-model-${currentProvider}`);
+          if (codeModel) modelToUse = codeModel;
+        }
+      }
+    }
+
+    // Validate that we have a model selected
+    if (!modelToUse) {
+      toast.error(`No model selected for ${chatMode ? 'chat' : 'code'} mode. Please select a model in settings.`);
+      return;
+    }
+
     isAutoScrollEnabled.current = true;
     isUserScrolling.current = false;
 
@@ -849,7 +904,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
       // Get existing conversation for context
       const existingConversation = await conversationState.getConversationMessages(project.id, 50); // Max 50 messages for context
       
-      // **CRITICAL BUG FIX**: Validate UI/Context synchronization
+      // Validate UI/Context synchronization
       const currentUIMessages = messages.length;
       const contextMessages = existingConversation.filter(m => m.role === 'user' || m.role === 'assistant').length;
       
@@ -882,8 +937,8 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
       } catch {
         // Ignore errors getting file tree
       }
-      
-      const systemPrompt = buildShellSystemPrompt(fileTree);
+
+      const systemPrompt = buildShellSystemPrompt(fileTree, chatMode);
       
       const currentMessages = await new Promise<Message[]>(resolve => {
         setMessages(prev => {
@@ -905,130 +960,251 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
       const orchestrator = new Orchestrator(
         project.id,
         conversationForOrchestrator,
-          (message, step) => {
-            if (message === 'assistant_delta' && ((step as any)?.text || (step as any)?.snapshot)) {
-              const deltaText = (step as any).text as string | undefined;
-              const snapshot = (step as any).snapshot as string | undefined;
-              setMessages(prev => {
-                let { arr, idx } = ensureStreamingAssistant([...prev]);
-                if (idx < 0 || idx >= arr.length || !arr[idx]) {
-                  logger.error('[assistant_delta] Invalid index or missing message:', { idx, arrayLength: arr.length });
-                  return prev; // Don't update if index is invalid
-                }
-                const base = arr[idx];
-                const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
-                const tms = msg.toolMessages as ToolMessageItem[];
-                if (tms.length === 0 || tms[tms.length - 1].type !== 'message') {
-                  tms.push({ id: makeId(), type: 'message', content: '' });
-                }
-                const current = tms[tms.length - 1];
-                if (snapshot !== undefined) {
-                  current.content = snapshot;
-                } else if (deltaText) {
-                  current.content = (current.content || '') + deltaText;
-                }
-                arr[idx] = msg;
-                return arr;
-              });
-            }
-            if (message === 'toolCalls' && (step as any)?.toolCalls) {
-              const calls = (step as any).toolCalls as any[];
-              logger.debug(`[Workspace] Received ${calls.length} tool calls`);
-              setMessages(prev => {
-                let { arr, idx } = ensureStreamingAssistant([...prev]);
-                const base = arr[idx];
-                const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
-                const tms = msg.toolMessages as ToolMessageItem[];
-                for (let i = 0; i < calls.length; i++) {
-                  const c = calls[i];
-                  const name = c.function?.name || c.name || '';
-                  let parameters;
-                  try {
-                    parameters = c.function ? JSON.parse(c.function.arguments || '{}') : c.parameters;
-                  } catch {
-                    // Handle non-JSON arguments like patch strings
-                    parameters = c.function ? { arguments: c.function.arguments } : c.parameters;
-                  }
-                  tms.push({ 
-                    id: makeId(), 
-                    type: 'tool', 
-                    name: name,
-                    parameters: parameters, 
-                    status: 'pending', 
-                    result: null 
-                  } as ToolMessageItem);
-                }
+        (message, step) => {
+          if (message === 'assistant_delta' && ((step as any)?.text || (step as any)?.snapshot)) {
+            const deltaText = (step as any).text as string | undefined;
+            const snapshot = (step as any).snapshot as string | undefined;
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              if (idx < 0 || idx >= arr.length || !arr[idx]) {
+                logger.error('[assistant_delta] Invalid index or missing message:', { idx, arrayLength: arr.length });
+                return prev; // Don't update if index is invalid
+              }
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              let tms = msg.toolMessages as ToolMessageItem[];
+
+              // Remove thinking indicator when content starts arriving
+              tms = tms.filter(item => item.type !== 'thinking');
+
+              // Check if we need to create a new message item or continue existing one
+              // If there are tools after the last message, we're starting a new response
+              const lastMessageIdx = tms.findLastIndex(t => t.type === 'message');
+              const hasToolsAfterLastMessage = lastMessageIdx >= 0 &&
+                tms.slice(lastMessageIdx + 1).some(t => t.type === 'tool');
+
+              if (tms.length === 0 || tms[tms.length - 1].type !== 'message' || hasToolsAfterLastMessage) {
+                tms.push({ id: makeId(), type: 'message', content: '' });
+              }
+
+              const current = tms[tms.length - 1];
+              const updatedMessage = { ...current };
+              if (snapshot !== undefined) {
+                updatedMessage.content = snapshot;
+              } else if (deltaText) {
+                updatedMessage.content = (updatedMessage.content || '') + deltaText;
+              }
+              tms[tms.length - 1] = updatedMessage;
+
+              msg.toolMessages = tms;
               arr[idx] = msg;
               return arr;
             });
           }
-            if (message === 'usage' && (step as any)?.usage) {
-              setMessages(prev => {
-                if (currentAssistantIdx.current == null) return prev;
-                const arr = [...prev];
-                const base = arr[currentAssistantIdx.current];
-                arr[currentAssistantIdx.current] = {
-                  ...base,
-                  cost: (step as any).totalCost,
-                  usage: (step as any).usage,
-                } as any;
-                return arr;
+          if (message === 'toolCalls' && (step as any)?.toolCalls) {
+            const calls = (step as any).toolCalls as any[];
+            logger.debug(`[Workspace] Received ${calls.length} tool calls`, {
+              calls: calls.map(c => ({
+                id: c.id,
+                name: c.function?.name,
+                hasArgs: !!c.function?.arguments,
+                argsLength: c.function?.arguments?.length
+              }))
+            });
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              let tms = msg.toolMessages as ToolMessageItem[];
+
+              // Remove thinking indicator when tools start arriving
+              tms = tms.filter(item => item.type !== 'thinking');
+              for (let i = 0; i < calls.length; i++) {
+                const c = calls[i];
+                const toolId = c.id || makeId(); // Use API tool ID if available
+                const name = c.function?.name || c.name || '';
+
+                // Check if this tool already exists (from early notification)
+                const existingToolIndex = tms.findIndex(t => t.type === 'tool' && t.id === toolId);
+
+                if (existingToolIndex >= 0) {
+                  // Update existing tool with complete parameters
+                  let parameters;
+                  try {
+                    parameters = c.function ? JSON.parse(c.function.arguments || '{}') : c.parameters;
+                  } catch {
+                    parameters = c.function ? { arguments: c.function.arguments } : c.parameters;
+                  }
+                  tms[existingToolIndex] = {
+                    ...tms[existingToolIndex],
+                    name: name || tms[existingToolIndex].name,
+                    parameters: parameters,
+                  };
+                } else {
+                  // Add new tool
+                  let parameters;
+                  try {
+                    parameters = c.function ? JSON.parse(c.function.arguments || '{}') : c.parameters;
+                  } catch {
+                    parameters = c.function ? { arguments: c.function.arguments } : c.parameters;
+                  }
+                  tms.push({
+                    id: toolId,
+                    type: 'tool',
+                    name: name,
+                    parameters: parameters,
+                    status: 'pending',
+                    result: null
+                  } as ToolMessageItem);
+                }
+              }
+              msg.toolMessages = tms;
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'tool_param_delta' && (step as any)?.toolId) {
+            const { toolId, partialArguments } = step as any;
+            logger.debug(`[Workspace] Received tool_param_delta for ${toolId}`, {
+              argsLength: partialArguments?.length,
+              preview: partialArguments?.substring(0, 100)
+            });
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              const tms = msg.toolMessages as ToolMessageItem[];
+
+              // Find the tool by ID and update its parameters
+              for (let i = tms.length - 1; i >= 0; i--) {
+                if (tms[i].type === 'tool' && tms[i].id === toolId) {
+                  // Try to parse partial JSON, show raw if incomplete
+                  let parsedParams;
+                  try {
+                    parsedParams = JSON.parse(partialArguments);
+                  } catch {
+                    // JSON is incomplete, store raw for now
+                    parsedParams = { _partial: partialArguments };
+                  }
+                  tms[i] = { ...tms[i], parameters: parsedParams };
+                  break;
+                }
+              }
+
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'usage' && (step as any)?.usage) {
+            setMessages(prev => {
+              if (currentAssistantIdx.current == null) return prev;
+              const arr = [...prev];
+              const base = arr[currentAssistantIdx.current];
+              arr[currentAssistantIdx.current] = {
+                ...base,
+                cost: (step as any).totalCost,
+                usage: (step as any).usage,
+              } as any;
+              return arr;
+            });
+          }
+          if (message === 'retry' && (step as any)?.reason) {
+            const { reason, attempt, maxAttempts } = step as any;
+            logger.debug(`[Workspace] Received retry notification: ${reason} (${attempt}/${maxAttempts})`);
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              (msg.toolMessages as ToolMessageItem[]).push({
+                id: makeId(),
+                type: 'divider',
+                title: `⚠️ ${reason} (Retry ${attempt}/${maxAttempts})`
               });
-            }
-            if (message === 'evaluation' && (step as any)?.summary) {
-              const summary = (step as any).summary as string;
-              setMessages(prev => {
-                let { arr, idx } = ensureStreamingAssistant([...prev]);
-                const base = arr[idx];
-                const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
-                (msg.toolMessages as ToolMessageItem[]).push({ id: makeId(), type: 'message', content: summary });
-                arr[idx] = msg;
-                return arr;
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'thinking') {
+            logger.debug(`[Workspace] Received thinking notification`);
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              const tms = msg.toolMessages as ToolMessageItem[];
+
+              // Remove any existing thinking indicator first
+              const filtered = tms.filter(item => item.type !== 'thinking');
+
+              // Add new thinking indicator at the end
+              filtered.push({
+                id: makeId(),
+                type: 'thinking' as any
               });
-            }
-            if (message === 'divider') {
-              setMessages(prev => {
-                let { arr, idx } = ensureStreamingAssistant([...prev]);
-                const base = arr[idx];
-                const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
-                (msg.toolMessages as ToolMessageItem[]).push({ id: makeId(), type: 'divider', title: (step as any)?.title || 'Section' });
-                arr[idx] = msg;
-                return arr;
-              });
-            }
-            if (message === 'tool_result' && step) {
-              const { toolIndex, result } = step as any;
-              logger.debug(`[Workspace] Received tool result for tool ${toolIndex}`, { resultPreview: typeof result === 'string' ? result.substring(0, 100) : result });
-              setMessages(prev => {
-                let { arr, idx } = ensureStreamingAssistant([...prev]);
-                const base = arr[idx];
-                const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
-                const tms = msg.toolMessages as ToolMessageItem[];
-                
-                // Find the most recent tool message and update its result
-                // Since toolIndex from orchestrator might not match accumulated list, update the last tool
-                for (let i = tms.length - 1; i >= 0; i--) {
-                  if (tms[i].type === 'tool' && !tms[i].result) {
+
+              msg.toolMessages = filtered;
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'evaluation' && (step as any)?.summary) {
+            const summary = (step as any).summary as string;
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              (msg.toolMessages as ToolMessageItem[]).push({ id: makeId(), type: 'message', content: summary });
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'divider') {
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              (msg.toolMessages as ToolMessageItem[]).push({ id: makeId(), type: 'divider', title: (step as any)?.title || 'Section' });
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'tool_result' && step) {
+            const { toolIndex, result } = step as any;
+            logger.debug(`[Workspace] Received tool result for tool ${toolIndex}`, { resultPreview: typeof result === 'string' ? result.substring(0, 100) : result });
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              const tms = msg.toolMessages as ToolMessageItem[];
+
+              // Find the Nth tool (where N = toolIndex) and update its result
+              let toolCount = 0;
+              for (let i = 0; i < tms.length; i++) {
+                if (tms[i].type === 'tool') {
+                  if (toolCount === toolIndex) {
                     tms[i] = { ...tms[i], result: result };
                     break;
                   }
+                  toolCount++;
                 }
-                
-                arr[idx] = msg;
-                return arr;
-              });
-            }
-            if (message === 'tool_status' && step) {
-              const { toolIndex, status, result, error } = step as any;
-              setMessages(prev => {
-                let { arr, idx } = ensureStreamingAssistant([...prev]);
-                const base = arr[idx];
-                const msg: Message = { ...base, toolMessages: [...(base.toolMessages || [])] } as any;
-                const tms = msg.toolMessages as ToolMessageItem[];
+              }
 
-                // Find the most recent tool message to update its status
-                for (let i = tms.length - 1; i >= 0; i--) {
-                  if (tms[i].type === 'tool' && (tms[i].status === 'pending' || tms[i].status === 'executing')) {
+              arr[idx] = msg;
+              return arr;
+            });
+          }
+          if (message === 'tool_status' && step) {
+            const { toolIndex, status, result, error } = step as any;
+            setMessages(prev => {
+              let { arr, idx } = ensureStreamingAssistant([...prev]);
+              const base = arr[idx];
+              const msg = cloneMessageForUpdate(base) as any;
+              const tms = msg.toolMessages as ToolMessageItem[];
+
+              // Find the Nth tool (where N = toolIndex) and update its status
+              let toolCount = 0;
+              for (let i = 0; i < tms.length; i++) {
+                if (tms[i].type === 'tool') {
+                  if (toolCount === toolIndex) {
                     tms[i] = {
                       ...tms[i],
                       status: status,
@@ -1036,20 +1212,24 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                     };
                     break;
                   }
+                  toolCount++;
                 }
+              }
 
-                arr[idx] = msg;
-                return arr;
-              });
-            }
+              msg.toolMessages = tms;
+              arr[idx] = msg;
+              return arr;
+            });
           }
-        );
+        },
+        { chatMode, model: modelToUse }
+      );
 
         // Store orchestrator reference for stop functionality
         setCurrentOrchestrator(orchestrator);
-        
+
         const result = await orchestrator.execute(messageContent);
-        
+
         // Attach checkpoint and usage to the current streamed assistant message
         setMessages(prev => {
           if (currentAssistantIdx.current == null) return prev;
@@ -1066,8 +1246,41 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
 
         if (result.success) {
           handleFilesChange();
+        } else {
+          // Handle failure case - show error and persist in message
+          toast.error(result.summary || 'Generation failed', {
+            duration: 5000,
+            position: 'bottom-center'
+          });
+
+          // Add error message to toolMessages and remove thinking indicator
+          setMessages(prev => {
+            const updated = [...prev];
+            if (currentAssistantIdx.current !== null &&
+                currentAssistantIdx.current >= 0 &&
+                currentAssistantIdx.current < updated.length) {
+              const assistantMsg = updated[currentAssistantIdx.current];
+              if (assistantMsg && assistantMsg.toolMessages) {
+                updated[currentAssistantIdx.current] = {
+                  ...assistantMsg,
+                  toolMessages: [
+                    ...assistantMsg.toolMessages.filter(
+                      (item: ToolMessageItem) => item.type !== 'thinking'
+                    ),
+                    {
+                      id: makeId(),
+                      type: 'divider',
+                      title: result.summary || 'Generation failed',
+                      subtitle: 'Error'
+                    } as ToolMessageItem
+                  ]
+                };
+              }
+            }
+            return updated;
+          });
         }
-        
+
         // Persist the updated conversation to IndexedDB after generation
         const finalMessages = await new Promise<Message[]>((resolve) => {
           setMessages(prev => {
@@ -1075,19 +1288,50 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
             return prev;
           });
         });
-        
+
         const orchestratorMessages = ConversationConverter.convertToOrchestratorMessages(finalMessages);
         await conversationState.updateConversation(project.id, orchestratorMessages);
         
         setPrompt('');
     } catch (error) {
       logger.error('Generation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate');
-      setMessages(prev => [...prev, { 
-        id: makeId(),
-        role: 'assistant', 
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
-      } as any]);
+
+      // Show toast notification
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate';
+      toast.error(errorMessage, {
+        duration: 5000,
+        position: 'bottom-center'
+      });
+
+      // Remove "Thinking..." indicator and add error message
+      setMessages(prev => {
+        const updated = [...prev];
+
+        // Remove thinking indicator from the last assistant message if it exists
+        if (currentAssistantIdx.current !== null &&
+            currentAssistantIdx.current >= 0 &&
+            currentAssistantIdx.current < updated.length) {
+          const assistantMsg = updated[currentAssistantIdx.current];
+          if (assistantMsg && assistantMsg.toolMessages) {
+            // Create new object to ensure React detects the change
+            updated[currentAssistantIdx.current] = {
+              ...assistantMsg,
+              toolMessages: assistantMsg.toolMessages.filter(
+                (item: ToolMessageItem) => item.type !== 'thinking'
+              )
+            };
+          }
+        }
+
+        // Add error message
+        updated.push({
+          id: makeId(),
+          role: 'assistant',
+          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        } as any);
+
+        return updated;
+      });
     } finally {
       setGenerating(false);
       setCurrentOrchestrator(null);
@@ -1195,6 +1439,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
           actions={headerActions}
           mobileMenuContent={mobileMenuContent}
           desktopOnlyContent={desktopSettingsButton}
+          mobileVisibleActions={isDirty ? ['save'] : []}
         />
 
         {/* Desktop Workspace */}
@@ -1339,15 +1584,15 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
           <ResizablePanelGroup direction="horizontal" autoSaveId="workspace-layout">
             {/* Column 1: AI Assistant */}
             {showAssistant && (
-              <ResizablePanel 
+              <ResizablePanel
                 id="assistant"
                 order={1}
-                defaultSize={defaultSizes.assistant} 
+                defaultSize={defaultSizes.assistant}
                 minSize={15}
               >
                 <div
                   className="h-full flex flex-col border border-border rounded-lg shadow-sm overflow-hidden relative"
-                  style={{ background: `linear-gradient(var(--panel-assistant-tint), var(--panel-assistant-tint)), var(--card)` }}
+                  style={{ background: `linear-gradient(var(--panel-assistant-tint), var(--panel-assistant-tint)), var(--card)`, minWidth: '240px' }}
                   data-tour-id="assistant-panel"
                 >
                       <div className="p-3 border-b bg-muted/80 flex items-center justify-between">
@@ -1442,12 +1687,17 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                               );
                             }
                             
-                            if (
-                              msg.role === 'assistant' && (
-                                (msg as any).toolMessages && (msg as any).toolMessages.length > 0 ||
-                                (msg as any).toolCalls && (msg as any).toolCalls.length > 0
-                              )
-                            ) {
+                            if (msg.role === 'assistant') {
+                              // Render AssistantMessage for any assistant message:
+                              // - Has toolMessages/toolCalls
+                              // - Empty (for "Thinking..." indicator)
+                              const hasTools = (
+                                ((msg as any).toolMessages && (msg as any).toolMessages.length > 0) ||
+                                ((msg as any).toolCalls && (msg as any).toolCalls.length > 0)
+                              );
+                              const isEmpty = !msg.content?.trim() && !hasTools;
+
+                              if (hasTools || isEmpty) {
                               return (
                                 <div key={msg.id} className="bg-card border border-border p-3 rounded-lg text-sm mr-2">
                                   <div className="mb-2">
@@ -1467,8 +1717,9 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                                   />
                                 </div>
                               );
+                              }
                             }
-                            
+
                             return (
                               <div
                                 key={msg.id}
@@ -1541,10 +1792,10 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                                 <TooltipContent side="left">
                                   <div className="space-y-1">
                                     <p className="text-xs">
-                                      <kbd className="text-xs bg-muted px-1 py-0.5 rounded">Ctrl/Cmd+Enter</kbd> to send
+                                      <kbd className="text-xs bg-primary-foreground text-primary px-1 py-0.5 rounded">Ctrl/Cmd+Enter</kbd> to send
                                     </p>
                                     <p className="text-xs">
-                                      <kbd className="text-xs bg-muted px-1 py-0.5 rounded">Enter</kbd> for newline
+                                      <kbd className="text-xs bg-primary-foreground text-primary px-1 py-0.5 rounded">Enter</kbd> for newline
                                     </p>
                                   </div>
                                 </TooltipContent>
@@ -1559,33 +1810,69 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                           
                           {/* Footer */}
                           <div className="border-t border-border bg-muted/50 px-2 py-2">
-                            <div className="flex items-center justify-between">
-                            {/* Model selector and settings combined */}
-                            <Popover open={showDesktopSettings} onOpenChange={setShowDesktopSettings}>
-                              <PopoverTrigger asChild>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="h-7 text-xs"
-                                  data-tour-id="provider-settings-trigger"
-                                >
-                                  <span>{getModelDisplayName(currentModel)}</span>
-                                  {showDesktopSettings ? (
-                                    <ChevronDown className="h-3 w-3 ml-1" />
-                                  ) : (
-                                    <ChevronUp className="h-3 w-3 ml-1" />
-                                  )}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-96" align="start">
-                                <ModelSettingsPanel 
-                                  onClose={() => setShowDesktopSettings(false)}
-                                  onModelChange={(modelId) => setCurrentModel(modelId)}
-                                />
-                              </PopoverContent>
-                            </Popover>
+                            <div className="flex items-center justify-between gap-2">
+                              {/* Model selector and settings combined */}
+                              <Popover open={showDesktopSettings} onOpenChange={setShowDesktopSettings}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    data-tour-id="provider-settings-trigger"
+                                  >
+                                    <span>{getModelDisplayName(currentModel)}</span>
+                                    {showDesktopSettings ? (
+                                      <ChevronDown className="h-3 w-3 ml-1" />
+                                    ) : (
+                                      <ChevronUp className="h-3 w-3 ml-1" />
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-96" align="start">
+                                  <ModelSettingsPanel
+                                    onClose={() => setShowDesktopSettings(false)}
+                                    onModelChange={(modelId) => setCurrentModel(modelId)}
+                                  />
+                                </PopoverContent>
+                              </Popover>
 
-                          </div>
+                              {/* Chat/Code toggle */}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <ToggleGroup
+                                    type="single"
+                                    value={chatMode ? 'chat' : 'code'}
+                                    onValueChange={(value) => {
+                                      if (value) setChatMode(value === 'chat');
+                                    }}
+                                    className="h-7"
+                                  >
+                                    <ToggleGroupItem
+                                      value="chat"
+                                      className="h-7 text-xs px-2"
+                                      style={chatMode ? { backgroundColor: 'var(--button-assistant-active)', color: 'white' } : undefined}
+                                    >
+                                      <MessageSquare className="h-3 w-3 mr-1" />
+                                      Chat
+                                    </ToggleGroupItem>
+                                    <ToggleGroupItem value="code" className="h-7 text-xs px-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                                      <Code2 className="h-3 w-3 mr-1" />
+                                      Code
+                                    </ToggleGroupItem>
+                                  </ToggleGroup>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <div className="space-y-1">
+                                    <p className="text-xs">
+                                      <kbd className="text-xs bg-primary-foreground text-primary px-1 py-0.5 rounded">Chat</kbd> Conversational interactions and explanations
+                                    </p>
+                                    <p className="text-xs">
+                                      <kbd className="text-xs bg-primary-foreground text-primary px-1 py-0.5 rounded">Code</kbd> Full development with tool execution
+                                    </p>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1598,13 +1885,13 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
 
             {/* Column 2: File Explorer */}
             {showFiles && (
-              <ResizablePanel 
+              <ResizablePanel
                 id="files"
                 order={2}
-                defaultSize={defaultSizes.files} 
+                defaultSize={defaultSizes.files}
                 minSize={14}
               >
-                <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-files-rgb), 0.01), rgba(var(--panel-files-rgb), 0.01)), var(--card)` }}>
+                <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-files-rgb), 0.01), rgba(var(--panel-files-rgb), 0.01)), var(--card)`, minWidth: '240px' }}>
                       <FileExplorer
                         projectId={project.id}
                         onFileSelect={handleFileSelect}
@@ -1619,13 +1906,13 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
 
             {/* Column 3: Code Editor */}
             {showEditor && (
-              <ResizablePanel 
+              <ResizablePanel
                 id="editor"
                 order={3}
-                defaultSize={defaultSizes.editor} 
+                defaultSize={defaultSizes.editor}
                 minSize={20}
               >
-                <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-editor-rgb), 0.01), rgba(var(--panel-editor-rgb), 0.01)), var(--card)` }}>
+                <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-editor-rgb), 0.01), rgba(var(--panel-editor-rgb), 0.01)), var(--card)`, minWidth: '240px' }}>
                       <MultiTabEditor
                         projectId={project.id}
                         onFilesChange={handleFilesChange}
@@ -1640,19 +1927,19 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
 
             {/* Column 4: Preview */}
             {showPreview && (
-              <ResizablePanel 
+              <ResizablePanel
                 id="preview"
                 order={4}
-                defaultSize={defaultSizes.preview} 
+                defaultSize={defaultSizes.preview}
                 minSize={20}
               >
-                <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-preview-rgb), 0.01), rgba(var(--panel-preview-rgb), 0.01)), var(--card)` }}>
+                <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-preview-rgb), 0.01), rgba(var(--panel-preview-rgb), 0.01)), var(--card)`, minWidth: '240px' }}>
                       <MultipagePreview
                         projectId={project.id}
                         refreshTrigger={refreshTrigger}
                         onFocusSelection={handleFocusSelection}
                         hasFocusTarget={Boolean(focusContext)}
-                        onClose={() => setShowPreview(false)}
+                        onClose={handleClosePreview}
                       />
                     </div>
                 </ResizablePanel>
@@ -1823,29 +2110,68 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                     
                     {/* Footer */}
                     <div className="border-t border-border bg-muted/50 px-2 py-2">
-                      <Popover open={showMobileSettings} onOpenChange={setShowMobileSettings}>
-                        <PopoverTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-7 text-xs"
-                            data-tour-id="provider-settings-trigger"
-                          >
-                            <span>{getModelDisplayName(currentModel)}</span>
-                            {showMobileSettings ? (
-                              <ChevronDown className="h-3 w-3 ml-1" />
-                            ) : (
-                              <ChevronUp className="h-3 w-3 ml-1" />
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)]" align="start">
-                          <ModelSettingsPanel 
-                            onClose={() => setShowMobileSettings(false)}
-                            onModelChange={(modelId) => setCurrentModel(modelId)}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <div className="flex items-center justify-between gap-2">
+                        <Popover open={showMobileSettings} onOpenChange={setShowMobileSettings}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              data-tour-id="provider-settings-trigger"
+                            >
+                              <span>{getModelDisplayName(currentModel)}</span>
+                              {showMobileSettings ? (
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              ) : (
+                                <ChevronUp className="h-3 w-3 ml-1" />
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[calc(100vw-2rem)]" align="start">
+                            <ModelSettingsPanel
+                              onClose={() => setShowMobileSettings(false)}
+                              onModelChange={(modelId) => setCurrentModel(modelId)}
+                            />
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* Chat/Code toggle */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <ToggleGroup
+                              type="single"
+                              value={chatMode ? 'chat' : 'code'}
+                              onValueChange={(value) => {
+                                if (value) setChatMode(value === 'chat');
+                              }}
+                              className="h-7"
+                            >
+                              <ToggleGroupItem
+                                value="chat"
+                                className="h-7 text-xs px-2"
+                                style={chatMode ? { backgroundColor: 'var(--button-assistant-active)', color: 'white' } : undefined}
+                              >
+                                <MessageSquare className="h-3 w-3 mr-1" />
+                                Chat
+                              </ToggleGroupItem>
+                              <ToggleGroupItem value="code" className="h-7 text-xs px-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                                <Code2 className="h-3 w-3 mr-1" />
+                                Code
+                              </ToggleGroupItem>
+                            </ToggleGroup>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <div className="space-y-1">
+                              <p className="text-xs">
+                                <kbd className="text-xs bg-primary-foreground text-primary px-1 py-0.5 rounded">Chat</kbd> Conversational interactions and explanations
+                              </p>
+                              <p className="text-xs">
+                                <kbd className="text-xs bg-primary-foreground text-primary px-1 py-0.5 rounded">Code</kbd> Full development with tool execution
+                              </p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1879,7 +2205,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
                   refreshTrigger={refreshTrigger}
                   onFocusSelection={handleFocusSelection}
                   hasFocusTarget={Boolean(focusContext)}
-                  onClose={() => setShowPreview(false)}
+                  onClose={handleClosePreview}
                 />
               </div>
             )}

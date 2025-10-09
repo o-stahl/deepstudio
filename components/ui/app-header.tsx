@@ -28,6 +28,7 @@ interface AppHeaderProps {
   desktopOnlyContent?: React.ReactNode; // Content shown only on desktop
   className?: string;
   leftText?: string; // Text to show next to logo on desktop, centered on mobile
+  mobileVisibleActions?: string[]; // Action IDs to show outside dropdown on mobile
 }
 
 export function AppHeader({
@@ -39,9 +40,15 @@ export function AppHeader({
   mobileMenuContent,
   desktopOnlyContent,
   className = '',
-  leftText
+  leftText,
+  mobileVisibleActions = []
 }: AppHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Split actions into mobile-visible and dropdown-only
+  const mobileVisibleActionsSet = new Set(mobileVisibleActions);
+  const visibleOnMobile = actions.filter(a => mobileVisibleActionsSet.has(a.id));
+  const dropdownOnlyActions = actions.filter(a => !mobileVisibleActionsSet.has(a.id));
 
   return (
     <div className={`border-b bg-card shadow-sm relative z-20 ${className}`}>
@@ -100,9 +107,31 @@ export function AppHeader({
             ))}
             {desktopOnlyContent}
           </div>
-          
+
+          {/* Mobile visible actions */}
+          <div className="md:hidden flex items-center gap-2">
+            {visibleOnMobile.map((action) => (
+              action.content ? (
+                <div key={action.id}>{action.content}</div>
+              ) : (
+                <Button
+                  key={action.id}
+                  variant={action.variant || 'outline'}
+                  size={action.size || 'sm'}
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  className="h-8 px-3"
+                  data-tour-id={action.dataTourId}
+                >
+                  {action.icon && <action.icon className="h-4 w-4 mr-2" />}
+                  {action.label}
+                </Button>
+              )
+            ))}
+          </div>
+
           {/* Mobile menu toggle */}
-          {(actions.length > 0 || mobileMenuContent) && (
+          {(dropdownOnlyActions.length > 0 || mobileMenuContent) && (
             <Button
               variant="ghost"
               size="icon"
@@ -120,7 +149,7 @@ export function AppHeader({
       </div>
       
       {/* Mobile dropdown menu */}
-      {mobileMenuOpen && (actions.length > 0 || mobileMenuContent) && (
+      {mobileMenuOpen && (dropdownOnlyActions.length > 0 || mobileMenuContent) && (
         <div className="md:hidden border-t bg-muted/30 px-4 py-4 space-y-3">
           {/* Show subtitle on mobile if no leftText and no center title */}
           {!leftText && !title && subtitle && (
@@ -128,31 +157,33 @@ export function AppHeader({
               <p className="text-sm text-muted-foreground">{subtitle}</p>
             </div>
           )}
-          
-          {/* Mobile actions */}
-          <div className="space-y-2">
-            {actions.map((action) => (
-              action.content ? (
-                <div key={action.id}>{action.content}</div>
-              ) : (
-                <Button
-                  key={action.id}
-                  variant={action.variant || 'outline'}
-                  size={action.size || 'sm'}
-                  onClick={() => {
-                    action.onClick();
-                    setMobileMenuOpen(false);
-                  }}
-                  disabled={action.disabled}
-                  className="w-full justify-start"
-                  data-tour-id={action.dataTourId}
-                >
-                  {action.icon && <action.icon className="h-4 w-4 mr-2" />}
-                  {action.label}
-                </Button>
-              )
-            ))}
-          </div>
+
+          {/* Mobile dropdown-only actions */}
+          {dropdownOnlyActions.length > 0 && (
+            <div className="space-y-2">
+              {dropdownOnlyActions.map((action) => (
+                action.content ? (
+                  <div key={action.id}>{action.content}</div>
+                ) : (
+                  <Button
+                    key={action.id}
+                    variant={action.variant || 'outline'}
+                    size={action.size || 'sm'}
+                    onClick={() => {
+                      action.onClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    disabled={action.disabled}
+                    className="w-full justify-start"
+                    data-tour-id={action.dataTourId}
+                  >
+                    {action.icon && <action.icon className="h-4 w-4 mr-2" />}
+                    {action.label}
+                  </Button>
+                )
+              ))}
+            </div>
+          )}
 
           {/* Custom mobile menu content */}
           {mobileMenuContent && (

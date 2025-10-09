@@ -142,16 +142,23 @@ Habits:
                 input: JSON.parse(toolCall.function.arguments || '{}')
               });
             }
-            
+
             currentUserMessage = {
               role: 'assistant',
               content: content
             };
           } else {
-            currentUserMessage = { ...msg };
+            // Ensure non-empty content for Anthropic
+            const messageContent = msg.content || '';
+            if (!messageContent && msg.role === 'assistant') {
+              // Skip empty assistant messages (Anthropic rejects them)
+              currentUserMessage = null;
+            } else {
+              currentUserMessage = { ...msg };
+            }
           }
           
-          if (msg.role !== 'user') {
+          if (msg.role !== 'user' && currentUserMessage) {
             processedMessages.push(currentUserMessage);
             currentUserMessage = null;
           }
@@ -174,8 +181,30 @@ Habits:
     }
 
     if (tools && tools.length > 0) {
+      // Validate tools to ensure all required fields are present
+      const validTools = tools.filter((tool: { name?: string; description?: string; parameters?: unknown }) => {
+        if (!tool.name || tool.name.trim() === '') {
+          console.error('[API] Tool missing required "name" field:', tool);
+          return false;
+        }
+        if (!tool.description) {
+          console.warn('[API] Tool missing "description" field:', tool.name);
+        }
+        if (!tool.parameters) {
+          console.warn('[API] Tool missing "parameters" field:', tool.name);
+        }
+        return true;
+      });
+
+      if (validTools.length === 0) {
+        return NextResponse.json(
+          { error: 'All tools are invalid. Tools must have a name field.' },
+          { status: 400 }
+        );
+      }
+
       if (selectedProvider === 'anthropic') {
-        requestBody.tools = tools.map((tool: { name: string; description: string; parameters: unknown }) => ({
+        requestBody.tools = validTools.map((tool: { name: string; description: string; parameters: unknown }) => ({
           name: tool.name,
           description: tool.description,
           input_schema: tool.parameters
@@ -192,13 +221,13 @@ Habits:
           requestBody.tool_choice = { type: 'auto' };
         }
       } else if (selectedProvider === 'ollama') {
-        requestBody.tools = tools.map((tool: { name: string; description: string; parameters: unknown }) => ({
+        requestBody.tools = validTools.map((tool: { name: string; description: string; parameters: unknown }) => ({
           type: 'function',
           function: tool
         }));
         requestBody.tool_choice = tool_choice || 'auto';
       } else {
-        requestBody.tools = tools.map((tool: { name: string; description: string; parameters: unknown }) => ({
+        requestBody.tools = validTools.map((tool: { name: string; description: string; parameters: unknown }) => ({
           type: 'function',
           function: tool
         }));
@@ -231,18 +260,33 @@ Habits:
     });
 
     if (!response.ok) {
-      const error = await response.text();
+      const errorText = await response.text();
+
+      // Try to parse and extract clean error message from JSON response
+      let cleanError = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed.error?.message) {
+          // Extract the inner message: "Key limit exceeded. Manage it using..."
+          cleanError = parsed.error.message;
+        } else if (typeof parsed.error === 'string') {
+          cleanError = parsed.error;
+        }
+      } catch {
+        // Not JSON, use raw text as-is
+      }
+
       const headers: Record<string, string> = {};
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
         const rateLimitReset = response.headers.get('X-RateLimit-Reset');
         const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
-        
+
         if (retryAfter) headers['Retry-After'] = retryAfter;
         if (rateLimitReset) headers['X-RateLimit-Reset'] = rateLimitReset;
         if (rateLimitRemaining) headers['X-RateLimit-Remaining'] = rateLimitRemaining;
       }
-      if (selectedProvider === 'ollama' && error.includes('does not support tools') && tools && tools.length > 0) {
+      if (selectedProvider === 'ollama' && cleanError.includes('does not support tools') && tools && tools.length > 0) {
         const fallbackSystemPrompt = systemPrompt + `
 
 IMPORTANT: This model doesn't support native function calling, so you must use JSON format for tool calls.
@@ -309,9 +353,10 @@ You can make multiple tool calls in a single response. Always include the tool_c
           headers: fallbackHeaders,
         });
       }
-      
+
+
       return NextResponse.json(
-        { error: `${providerConfig.name} API error: ${error}` },
+        { error: `${providerConfig.name} API error: ${cleanError}` },
         { status: response.status, headers }
       );
     }
@@ -391,7 +436,7 @@ function buildHeaders(
     
     if (provider === 'openrouter') {
       headers['HTTP-Referer'] = request.headers.get('referer') || 'http://localhost:3000';
-      headers['X-Title'] = 'DeepStudio';
+      headers['X-Title'] = 'OSW-Studio';
     }
   }
   

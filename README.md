@@ -1,21 +1,26 @@
-# DeepStudio
+<div align="center">
+  <img src="public/osw-studio-logo.svg" alt="OSW Studio Logo" width="128" height="128" />
+</div>
+
+# Open Source Web Studio
 
 **Agentic Browser-based Website Builder**
 
-**Links**: [GitHub Repository](https://github.com/o-stahl/deepstudio) | [Live Demo](https://huggingface.co/spaces/otst/deepstudio) | [Changelog](./CHANGELOG.md)
+**Links**: [GitHub Repository](https://github.com/o-stahl/osw-studio) | [Live Demo](https://huggingface.co/spaces/otst/osw-studio)
 
-DeepStudio is a fork from @enzostvs' DeepSite v2 that over the months of tinkering became a BYOK (Bring Your Own Key) agentic browser-based website builder where you describe what you want and an agent writes the code.
+Open Source Web Studio is a BYOK (Bring Your Own Key) agentic browser-based website builder where you describe what you want and an agent writes the code. Originally forked from @enzostvs' DeepSite v2, it has evolved into a full-featured development environment.
 
-This is a solo project and there isn't a huge corporation behind it. 
-I'll do my best to fix issues and possibly keep the project improving, but it's just a me doing this for fun so please be patient. All feedback and contributions are more than welcome.
+This is a solo project and there isn't a huge corporation behind it.
+I'll do my best to fix issues and possibly keep the project improving, but it's just me doing this for fun so please be patient. All feedback and contributions are more than welcome.
 
-If you make something with the app I would be thrilled if you could share what you've made. 
+If you make something with the app I would be thrilled if you could share what you've made.
 
-**Note**: DeepStudio builds static web sites/applications (HTML/CSS/JS). It's for prototyping front-end apps, demos, and landing pages, not for running backend code (Python, Node.js, etc.).
+**Note**: OSW Studio builds static web sites/applications (HTML/CSS/JS). It's for prototyping front-end apps, demos, and landing pages, not for running backend code (Python, Node.js, etc.).
 
 ## Key Features
 
 - **Agentic coding**: Agent autonomously handles file operations, edits code, and manages project structure
+- **Dual modes**: Chat mode for read-only exploration and planning, Code mode for full implementation
 - **Multi-provider AI**: Works with Ollama, LM Studio, OpenRouter (200+ models), OpenAI, Anthropic Claude, Google Gemini, Groq, and SambaNova
 - **Development environment**: Monaco editor with multi-tab support, live preview with hot reload, file explorer
 - **Browser storage**: Everything stays in IndexedDB - no backend required
@@ -28,7 +33,7 @@ If you make something with the app I would be thrilled if you could share what y
 ## Getting Started
 
 1. **Get API Key**: Sign up for or spin up any supported provider
-2. **Open DeepStudio**: Open the app in your browser
+2. **Open OSW-Studio**: Open the app in your browser
 3. **Select Provider**: Choose from 8 LLM providers in settings
 4. **Enter API Key**: Add your provider's API key
 5. **Create Project**: Start with demo or create new
@@ -86,7 +91,7 @@ If you make something with the app I would be thrilled if you could share what y
 
 ## How It Works
 
-The agent interacts with the project through `shell` and `json_patch` tools operating on a virtual file system in your browser. The limited number of tools was a conscious choice to reduce the number of tools to reduce "tool stuffing" while leaning on the strong sh/bash capabilities of most modern models:
+The agent interacts with the project through `shell` and `json_patch` tools operating on a virtual file system in your browser. The limited number of tools was a conscious choice to reduce "tool stuffing" while leaning on the strong sh/bash capabilities of most modern models:
 
 - **VFS commands**: The agent uses CLI commands (`ls`, `cat`, `grep`, `mkdir`, `rm`, `mv`, `cp`) on the in-browser file system
 - **File editing**: Changes are applied through `json_patch` with precise string operations
@@ -100,8 +105,8 @@ You describe what you want in natural language, and the agent handles the implem
 
 ```bash
 # Clone repository
-git clone https://github.com/o-stahl/deepstudio.git
-cd deepstudio
+git clone https://github.com/o-stahl/osw-studio.git
+cd osw-studio
 
 # Install dependencies
 npm install
@@ -119,7 +124,7 @@ npm run build
 2. Select provider & enter API key
 3. Choose model & start generating
 
-**Get API Keys**: 
+**Get API Keys**:
 - [OpenRouter](https://openrouter.ai)
 - [OpenAI](https://platform.openai.com)
 - [Anthropic](https://console.anthropic.com)
@@ -180,4 +185,4 @@ MIT License - See LICENSE file
 
 ## Credits
 
-The project is not affiliated with @enzostvs, @victor or Hugging Face, but a big thanks to all for making the original project! Big thanks goes to Google as well for Google AI Studio (App Builder) as it was a significant inspiration for the project (and for their countless other open source contributions). OpenAI's Codex CLI helped with figuring out some of the agentic things while Anthropic's artifact/string patch based implementation was crucial for getting file edits to work reliably. More could and should be thanked so kudos to everyone contributing to open source software. 
+The project is not affiliated with @enzostvs, @victor or Hugging Face, but a big thanks to all for making the original project! Big thanks goes to Google as well for Google AI Studio (App Builder) as it was a significant inspiration for the project (and for their countless other open source contributions). OpenAI's Codex CLI helped with figuring out some of the agentic things while Anthropic's artifact/string patch based implementation was crucial for getting file edits to work reliably. More could and should be thanked so kudos to everyone contributing to open source software.

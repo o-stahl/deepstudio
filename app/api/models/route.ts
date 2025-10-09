@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
             headers: {
               'Authorization': `Bearer ${apiKey}`,
               'HTTP-Referer': request.headers.get('referer') || 'http://localhost:3000',
-              'X-Title': 'DeepStudio'
+              'X-Title': 'OSW-Studio'
             }
           });
           if (orResponse.ok) {
