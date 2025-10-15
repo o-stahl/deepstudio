@@ -11,9 +11,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { ProjectCard } from './project-card';
 import { MultipagePreview } from '@/components/preview/multipage-preview';
 import { AboutModal } from '@/components/about-modal';
-import { 
-  Plus, 
-  FolderOpen, 
+import {
+  Plus,
+  FolderOpen,
   Upload,
   Settings,
   Search,
@@ -22,9 +22,10 @@ import {
   ArrowUpDown,
   Info,
   TestTube,
-  Github
+  Github,
+  LayoutTemplate
 } from 'lucide-react';
-import { AppHeader, HeaderAction } from '@/components/ui/app-header';
+import { AppHeader, HeaderAction, ViewTab } from '@/components/ui/app-header';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,8 @@ import { SettingsPanel } from '@/components/settings';
 import { useGuidedTour } from '@/components/guided-tour/context';
 import { GuidedTourOverlay } from '@/components/guided-tour/overlay';
 import { configManager } from '@/lib/config/storage';
+import { TemplateExportDialog } from '@/components/templates/template-export-dialog';
+import { TemplateManager } from '@/components/template-manager';
 
 interface ProjectManagerProps {
   onProjectSelect: (project: Project) => void;
@@ -64,6 +67,7 @@ interface ProjectManagerProps {
 
 type SortOption = 'updated' | 'created' | 'name' | 'size';
 type ViewMode = 'grid' | 'list';
+type PageView = 'projects' | 'templates';
 
 export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
   const router = useRouter();
@@ -75,9 +79,11 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectTemplate, setNewProjectTemplate] = useState<'blank' | 'demo'>('blank');
   const [sortBy, setSortBy] = useState<SortOption>('updated');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [previewProject, setPreviewProject] = useState<Project | null>(null);
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
+  const [templateExportProject, setTemplateExportProject] = useState<Project | null>(null);
+  const [currentView, setCurrentView] = useState<PageView>('projects');
   const { state: tourState, setProjectList, start: startTour } = useGuidedTour();
   const tourStep = tourState.currentStep?.id;
   const tourRunning = tourState.status === 'running';
@@ -377,33 +383,7 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
     );
   }
 
-  const headerActions: HeaderAction[] = [
-    {
-      id: 'new-project',
-      label: 'New Project',
-      icon: Plus,
-      onClick: () => setCreateDialogOpen(true),
-      content: (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCreateDialogOpen(true)}
-          data-tour-id="new-project-button"
-          className="justify-start"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
-      ),
-    },
-    {
-      id: 'import',
-      label: 'Import',
-      icon: Upload,
-      onClick: importProject,
-      variant: 'outline',
-    },
-  ];
+  const headerActions: HeaderAction[] = [];
   
   // Desktop-only settings button
   const desktopSettingsButton = (
@@ -491,6 +471,15 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
     </div>
   );
 
+  const handleProjectCreatedFromTemplate = async (projectId: string) => {
+    await reloadProjects();
+    const project = await vfs.getProject(projectId);
+    if (project) {
+      setCurrentView('projects');
+      onProjectSelect(project);
+    }
+  };
+
   return (
     <div className="flex flex-col h-[100dvh]" style={{ background: `linear-gradient(var(--project-background-tint), var(--project-background-tint)), var(--background)` }}>
       {/* Header */}
@@ -500,118 +489,164 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         mobileMenuContent={mobileMenuContent}
         desktopOnlyContent={desktopSettingsButton}
         leftText="Open Source Web Studio"
+        viewTabs={[
+          { id: 'projects', label: 'Projects', icon: FolderOpen },
+          { id: 'templates', label: 'Templates', icon: LayoutTemplate }
+        ]}
+        activeViewTab={currentView}
+        onViewTabChange={(tabId) => setCurrentView(tabId as PageView)}
       />
       
       {/* Main Content */}
       <main className="flex-1 min-h-0 overflow-auto">
-        <div className="container mx-auto p-6 max-w-6xl">
+        {currentView === 'templates' ? (
+          <TemplateManager onProjectCreated={handleProjectCreatedFromTemplate} />
+        ) : (
+          <div className="h-full flex flex-col">
+            {/* Toolbar */}
+            <div className="pt-4 px-4 pb-3 sm:pt-6 sm:px-6 sm:pb-3 shrink-0">
+              <div className="mx-auto max-w-7xl flex flex-col sm:flex-row gap-3" data-tour-id="projects-actions">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search projects..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
 
-      <div className="mb-6 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4" data-tour-id="projects-actions">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search projects..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-card"
-            />
-          </div>
-          
-          <div className="flex gap-2">
-            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-              <SelectTrigger className="flex-1 md:w-[180px] bg-card">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Sort by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="updated">Last Updated</SelectItem>
-                <SelectItem value="created">Date Created</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-              </SelectContent>
-            </Select>
+                {/* Controls */}
+                <div className="flex items-center gap-2">
+                  {/* Sort */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <ArrowUpDown className="h-4 w-4" />
+                        <span className="hidden sm:inline">Sort</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48" align="end">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-sm">Sort by</h4>
+                        <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="updated">Last Updated</SelectItem>
+                            <SelectItem value="created">Date Created</SelectItem>
+                            <SelectItem value="name">Name</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
 
-            <div className="flex gap-0.5 border rounded-sm p-1 bg-card h-9">
-              <Button
-                size="icon"
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                className="h-full w-8 rounded-sm"
-                onClick={() => setViewMode('grid')}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                className="h-full w-8 rounded-sm"
-                onClick={() => setViewMode('list')}
-              >
-                <List className="h-4 w-4" />
-              </Button>
+                  {/* View Mode */}
+                  <div className="flex border rounded-full">
+                    <Button
+                      variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('grid')}
+                      className="rounded-r-none rounded-l-full"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('list')}
+                      className="rounded-l-none rounded-r-full"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* New Project */}
+                  <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span>New</span>
+                  </Button>
+
+                  {/* Import */}
+                  <Button onClick={importProject} variant="outline" size="sm" className="gap-2">
+                    <Upload className="h-4 w-4" />
+                    <span>Import</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Projects Grid/List */}
+            <div className="flex-1 px-4 pt-3 pb-4 sm:px-6 sm:pt-3 sm:pb-6">
+              <div className="mx-auto max-w-7xl">
+                {filteredProjects.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h2 className="text-xl font-semibold mb-2">
+                      {searchQuery ? 'No projects found' : 'No projects yet'}
+                    </h2>
+                    <p className="text-muted-foreground mb-6">
+                      {searchQuery
+                        ? 'Try a different search term'
+                        : 'Create your first project to get started'}
+                    </p>
+                    {!searchQuery && (
+                      <div className="flex gap-3 justify-center">
+                        <Button onClick={() => setCreateDialogOpen(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create Project
+                        </Button>
+                        <Button variant="outline" onClick={createDemoProject}>
+                          <FolderOpen className="mr-2 h-4 w-4" />
+                          Create Demo Project
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className={viewMode === 'grid'
+                      ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+                      : 'space-y-3'}
+                    data-tour-id="projects-list"
+                  >
+                    {filteredProjects.map(project => {
+                      if (typeof project !== 'object' || !project.id || !project.name) {
+                        logger.error('Invalid project object:', project);
+                        return null;
+                      }
+
+                      return (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          onSelect={onProjectSelect}
+                          onDelete={deleteProject}
+                          onExport={exportProject}
+                          onExportZip={exportProjectAsZip}
+                          onDuplicate={duplicateProject}
+                          onPreview={setPreviewProject}
+                          onExportAsTemplate={setTemplateExportProject}
+                          onUpdate={(updatedProject) => {
+                            setProjects(projects.map(p =>
+                              p.id === updatedProject.id ? updatedProject : p
+                            ));
+                          }}
+                          viewMode={viewMode}
+                          forceMenuOpen={tourActionProjectId === project.id}
+                          highlightExport={tourRunning && tourStep === 'project-controls' && tourActionProjectId === project.id}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {filteredProjects.length === 0 ? (
-        <div className="text-center py-12">
-          <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">
-            {searchQuery ? 'No projects found' : 'No projects yet'}
-          </h2>
-          <p className="text-muted-foreground mb-6">
-            {searchQuery 
-              ? 'Try a different search term' 
-              : 'Create your first project to get started'}
-          </p>
-          {!searchQuery && (
-            <div className="flex gap-3 justify-center">
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Project
-              </Button>
-              <Button variant="outline" onClick={createDemoProject}>
-                <FolderOpen className="mr-2 h-4 w-4" />
-                Create Demo Project
-              </Button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div
-          className={viewMode === 'grid' ? 'grid gap-4 md:grid-cols-2 lg:grid-cols-3' : 'space-y-3'}
-          data-tour-id="projects-list"
-        >
-          {filteredProjects.map(project => {
-            if (typeof project !== 'object' || !project.id || !project.name) {
-              logger.error('Invalid project object:', project);
-              return null;
-            }
-            
-            return (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onSelect={onProjectSelect}
-                onDelete={deleteProject}
-                onExport={exportProject}
-                onExportZip={exportProjectAsZip}
-                onDuplicate={duplicateProject}
-                onPreview={setPreviewProject}
-                onUpdate={(updatedProject) => {
-                  setProjects(projects.map(p => 
-                    p.id === updatedProject.id ? updatedProject : p
-                  ));
-                }}
-                viewMode={viewMode}
-                forceMenuOpen={tourActionProjectId === project.id}
-                highlightExport={tourRunning && tourStep === 'project-controls' && tourActionProjectId === project.id}
-              />
-            );
-          })}
-        </div>
-      )}
-        </div>
+        )}
       </main>
 
       {/* Footer with Navigation Buttons - Hidden on mobile */}
@@ -745,10 +780,19 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         </Dialog>
       )}
 
+      {/* Template Export Dialog */}
+      <TemplateExportDialog
+        project={templateExportProject}
+        open={!!templateExportProject}
+        onOpenChange={(open) => {
+          if (!open) setTemplateExportProject(null);
+        }}
+      />
+
       {/* About Modal */}
-      <AboutModal 
-        open={aboutModalOpen} 
-        onOpenChange={setAboutModalOpen} 
+      <AboutModal
+        open={aboutModalOpen}
+        onOpenChange={setAboutModalOpen}
       />
       <GuidedTourOverlay location="project-manager" />
     </div>

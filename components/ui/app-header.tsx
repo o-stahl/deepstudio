@@ -18,6 +18,12 @@ export interface HeaderAction {
   dataTourId?: string;
 }
 
+export interface ViewTab {
+  id: string;
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+}
+
 interface AppHeaderProps {
   title?: string;
   subtitle?: string;
@@ -29,6 +35,9 @@ interface AppHeaderProps {
   className?: string;
   leftText?: string; // Text to show next to logo on desktop, centered on mobile
   mobileVisibleActions?: string[]; // Action IDs to show outside dropdown on mobile
+  viewTabs?: ViewTab[]; // View tabs for switching between sections
+  activeViewTab?: string; // Currently active view tab
+  onViewTabChange?: (tabId: string) => void; // Callback when view tab changes
 }
 
 export function AppHeader({
@@ -41,7 +50,10 @@ export function AppHeader({
   desktopOnlyContent,
   className = '',
   leftText,
-  mobileVisibleActions = []
+  mobileVisibleActions = [],
+  viewTabs,
+  activeViewTab,
+  onViewTabChange
 }: AppHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -63,9 +75,29 @@ export function AppHeader({
           {leftText && <span className="font-semibold text-lg hidden md:inline">{leftText}</span>}
         </button>
 
-        {/* Center - leftText on mobile, title/badge on desktop */}
+        {/* Center - View tabs or leftText/title */}
         <div className="flex items-center gap-2 flex-1 justify-center md:justify-start md:ml-6">
-          {leftText ? (
+          {viewTabs && viewTabs.length > 0 ? (
+            /* Show view tabs as pill toggle */
+            <div className="flex border rounded-full">
+              {viewTabs.map((tab, index) => (
+                <Button
+                  key={tab.id}
+                  variant={activeViewTab === tab.id ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => onViewTabChange?.(tab.id)}
+                  className={`gap-2 ${
+                    index === 0 ? 'rounded-r-none rounded-l-full' :
+                    index === viewTabs.length - 1 ? 'rounded-l-none rounded-r-full' :
+                    'rounded-none'
+                  }`}
+                >
+                  {tab.icon && <tab.icon className="h-4 w-4" />}
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+          ) : leftText ? (
             /* Show leftText in center on mobile */
             <h1 className="text-lg font-semibold md:hidden">{leftText}</h1>
           ) : title ? (

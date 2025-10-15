@@ -6,7 +6,7 @@ import { vfs } from '@/lib/vfs';
 import { logger } from '@/lib/utils';
 import { FileExplorer } from '@/components/file-explorer';
 import { MultiTabEditor, openFileInEditor } from '@/components/editor/multi-tab-editor';
-import { MultipagePreview } from '@/components/preview/multipage-preview';
+import { MultipagePreview, MultipagePreviewHandle } from '@/components/preview/multipage-preview';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -126,6 +126,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
   const lastFocusSignatureRef = useRef<{ signature: string; timestamp: number } | null>(null);
   const currentAssistantIdx = useRef<number | null>(null);
   const idCounterRef = useRef(0);
+  const previewRef = useRef<MultipagePreviewHandle>(null);
   const makeId = useCallback((): string => {
     try {
       const anyCrypto = (globalThis as any)?.crypto;
@@ -644,8 +645,35 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
 
     setSaveInProgress(true);
     try {
+      // Capture preview screenshot if available (with timeout)
+      let previewImage: string | undefined;
+      if (previewRef.current) {
+        try {
+          const timeoutPromise = new Promise<null>((_, reject) => {
+            setTimeout(() => reject(new Error('Screenshot capture timeout')), 5000);
+          });
+          const screenshot = await Promise.race([
+            previewRef.current.captureScreenshot(),
+            timeoutPromise
+          ]);
+          if (screenshot) {
+            previewImage = screenshot;
+          }
+        } catch (screenshotError) {
+          logger.warn('Failed to capture preview screenshot, continuing save:', screenshotError);
+        }
+      }
+
       const checkpoint = await saveManager.save(project.id);
       const latestProject = await vfs.getProject(project.id);
+
+      // Update project with preview image if captured
+      if (previewImage) {
+        latestProject.previewImage = previewImage;
+        latestProject.previewUpdatedAt = new Date();
+        await vfs.updateProject(latestProject);
+      }
+
       setLastSavedAt(latestProject.lastSavedAt ?? new Date(checkpoint.timestamp));
       setInitialCheckpointId(checkpoint.id);
       const timestamp = new Date().toISOString();
@@ -1935,6 +1963,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
               >
                 <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-preview-rgb), 0.01), rgba(var(--panel-preview-rgb), 0.01)), var(--card)`, minWidth: '240px' }}>
                       <MultipagePreview
+                        ref={previewRef}
                         projectId={project.id}
                         refreshTrigger={refreshTrigger}
                         onFocusSelection={handleFocusSelection}
@@ -2201,6 +2230,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
             {activeMobilePanel === 'preview' && (
               <div className="h-full border border-border rounded-lg shadow-sm overflow-hidden relative" style={{ background: `linear-gradient(0deg, rgba(var(--panel-preview-rgb), 0.01), rgba(var(--panel-preview-rgb), 0.01)), var(--card)` }}>
                 <MultipagePreview
+                  ref={previewRef}
                   projectId={project.id}
                   refreshTrigger={refreshTrigger}
                   onFocusSelection={handleFocusSelection}

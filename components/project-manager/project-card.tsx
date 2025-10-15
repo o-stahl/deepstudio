@@ -7,9 +7,9 @@ import { logger } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Trash2, 
-  Download, 
+import {
+  Trash2,
+  Download,
   Package,
   Edit2,
   Check,
@@ -22,7 +22,8 @@ import {
   MoreVertical,
   FolderOpen,
   HardDrive,
-  DollarSign
+  DollarSign,
+  FileBox
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -44,6 +45,7 @@ interface ProjectCardProps {
   onDuplicate: (project: Project) => void;
   onPreview: (project: Project) => void;
   onUpdate: (project: Project) => void;
+  onExportAsTemplate?: (project: Project) => void;
   viewMode?: 'grid' | 'list';
   forceMenuOpen?: boolean;
   highlightExport?: boolean;
@@ -56,15 +58,16 @@ interface ProjectStats {
   formattedSize: string;
 }
 
-export function ProjectCard({ 
-  project, 
-  onSelect, 
-  onDelete, 
-  onExport, 
+export function ProjectCard({
+  project,
+  onSelect,
+  onDelete,
+  onExport,
   onExportZip,
   onDuplicate,
   onPreview,
   onUpdate,
+  onExportAsTemplate,
   viewMode = 'grid',
   forceMenuOpen = false,
   highlightExport = false,
@@ -174,142 +177,187 @@ export function ProjectCard({
 
   if (viewMode === 'list') {
     return (
-      <div 
+      <div
         className={`border border-border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer hover:border-primary/50 ${highlightExport ? 'ring-2 ring-primary/70 animate-ring-opacity' : ''}`}
         style={{ background: `linear-gradient(var(--project-card-tint), var(--project-card-tint)), var(--card)` }}
         onClick={() => onSelect(project)}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              {isEditing ? (
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Input
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveEdits();
-                      if (e.key === 'Escape') cancelEdit();
-                    }}
-                    className="h-7 text-sm"
-                    autoFocus
-                    maxLength={50}
-                  />
-                  <span className="text-xs text-muted-foreground">{editedName.length}/50</span>
-                  <Button size="icon" variant="ghost" className="h-5 w-5" onClick={saveEdits}>
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-5 w-5" onClick={cancelEdit}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold truncate">{project.name}</h3>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsEditing(true);
-                    }}
-                  >
-                    <Edit2 className="h-3 w-3" />
-                  </Button>
+        <div className="flex items-start gap-4">
+          {/* Preview Thumbnail */}
+          {project.previewImage ? (
+            <div className="w-16 h-12 rounded-md overflow-hidden bg-muted shrink-0 opacity-60">
+              <img
+                src={project.previewImage}
+                alt={`${project.name} preview`}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="w-16 h-12 rounded-md bg-muted flex items-center justify-center shrink-0 opacity-40">
+              <FileBox className="h-6 w-6 text-muted-foreground/30" />
+            </div>
+          )}
+
+          {/* Content - 2 columns on desktop, stacked on mobile */}
+          <div className="flex-1 min-w-0 flex flex-col md:flex-row md:gap-6">
+            {/* Column 2: Primary info (Title, Description, Updated) */}
+            <div className="flex-1 min-w-0 space-y-1">
+              {/* Title row */}
+              <div className="flex items-center gap-2">
+                {isEditing ? (
+                  <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                    <Input
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdits();
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      className="h-7 text-sm"
+                      autoFocus
+                      maxLength={50}
+                    />
+                    <span className="text-xs text-muted-foreground">{editedName.length}/50</span>
+                    <Button size="icon" variant="ghost" className="h-5 w-5" onClick={saveEdits}>
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-5 w-5" onClick={cancelEdit}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="font-semibold truncate">{project.name}</h3>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsEditing(true);
+                      }}
+                    >
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Description */}
+              {project.description && !isEditing && (
+                <p className="text-sm text-muted-foreground line-clamp-1">
+                  {project.description}
+                </p>
+              )}
+
+              {/* Updated timestamp */}
+              <p className="text-xs text-muted-foreground">
+                Updated {formatDistanceToNow(project.updatedAt, { addSuffix: true })}
+              </p>
+            </div>
+
+            {/* Column 3: Stats and File types */}
+            <div className="space-y-2 mt-2 md:mt-0">
+              {/* Stats - inline on desktop, horizontal on mobile */}
+              {stats && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <FolderOpen className="h-4 w-4" />
+                    {stats.fileCount} {stats.fileCount === 1 ? 'file' : 'files'}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <HardDrive className="h-4 w-4" />
+                    {stats.formattedSize}
+                  </span>
+                  {project.costTracking?.totalCost && project.costTracking.totalCost > 0 && (
+                    <span className="flex items-center gap-1">
+                      <DollarSign className="h-4 w-4" />
+                      {formatCost(project.costTracking.totalCost)}
+                    </span>
+                  )}
                 </div>
               )}
-              
-              {project.description && !isEditing && (
-                <span className="text-sm text-muted-foreground truncate max-w-md">
-                  {project.description}
-                </span>
+
+              {/* File types */}
+              {stats && getMainFileTypes().length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  {getMainFileTypes().map(([ext, count]) => (
+                    <div key={ext} className="flex items-center gap-1 text-muted-foreground">
+                      {getFileTypeIcon(ext)}
+                      <span>{ext.toUpperCase()} ({count})</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-4 ml-4">
-            {stats && (
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <FolderOpen className="h-4 w-4" />
-                  {stats.fileCount} files
-                </span>
-                <span className="flex items-center gap-1">
-                  <HardDrive className="h-4 w-4" />
-                  {stats.formattedSize}
-                </span>
-                {project.costTracking?.totalCost && (
-                  <span className="flex items-center gap-1">
-                    <DollarSign className="h-4 w-4" />
-                    {formatCost(project.costTracking.totalCost)}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {formatDistanceToNow(project.updatedAt, { addSuffix: true })}
-              </span>
-              
-              <DropdownMenu open={forceMenuOpen ? true : menuOpen} onOpenChange={handleMenuOpenChange}>
-                <DropdownMenuTrigger
-                  asChild
-                  onClick={(e) => e.stopPropagation()}
-                  data-tour-id={highlightExport ? 'project-actions-trigger' : undefined}
+          <div className="flex items-center gap-2 ml-4">
+            <DropdownMenu open={forceMenuOpen ? true : menuOpen} onOpenChange={handleMenuOpenChange}>
+              <DropdownMenuTrigger
+                asChild
+                onClick={(e) => e.stopPropagation()}
+                data-tour-id={highlightExport ? 'project-actions-trigger' : undefined}
+              >
+                <Button size="icon" variant="ghost" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onPreview(project);
+                }}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Preview
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onDuplicate(project);
+                }}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicate
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onExportZip(project);
+                }}>
+                  <Package className="mr-2 h-4 w-4" />
+                  Export as ZIP
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExport(project);
+                  }}
+                  data-tour-id={highlightExport ? 'project-export-json' : undefined}
                 >
-                  <Button size="icon" variant="ghost" className="h-8 w-8">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export as JSON
+                </DropdownMenuItem>
+                {onExportAsTemplate && (
                   <DropdownMenuItem onClick={(e) => {
                     e.stopPropagation();
-                    onPreview(project);
+                    onExportAsTemplate(project);
                   }}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview
+                    <FileBox className="mr-2 h-4 w-4" />
+                    Export as Template
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => {
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={(e) => {
                     e.stopPropagation();
-                    onDuplicate(project);
-                  }}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={(e) => {
-                    e.stopPropagation();
-                    onExportZip(project);
-                  }}>
-                    <Package className="mr-2 h-4 w-4" />
-                    Export as ZIP
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onExport(project);
-                    }}
-                    data-tour-id={highlightExport ? 'project-export-json' : undefined}
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Export as JSON
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(project);
-                    }}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                    onDelete(project);
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -319,12 +367,27 @@ export function ProjectCard({
   // Grid view (default)
   return (
     <div
-      className={`border border-border rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer hover:border-primary/50 group ${highlightExport ? 'ring-2 ring-primary/70 animate-ring-opacity' : ''}`}
+      className={`border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all cursor-pointer hover:border-primary/50 group ${highlightExport ? 'ring-2 ring-primary/70 animate-ring-opacity' : ''}`}
       style={{ background: `linear-gradient(var(--project-card-tint), var(--project-card-tint)), var(--card)` }}
       onClick={() => onSelect(project)}
       data-tour-id="project-card"
     >
-      <div className="space-y-3">
+      {/* Preview Thumbnail */}
+      {project.previewImage ? (
+        <div className="w-full aspect-video bg-muted">
+          <img
+            src={project.previewImage}
+            alt={`${project.name} preview`}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="w-full aspect-video bg-muted flex items-center justify-center">
+          <FileBox className="h-16 w-16 text-muted-foreground/30" />
+        </div>
+      )}
+
+      <div className="p-4 space-y-3">
         {/* Header with name and actions */}
         <div className="flex justify-between items-start">
           {isEditing ? (
@@ -413,8 +476,17 @@ export function ProjectCard({
                 <Download className="mr-2 h-4 w-4" />
                 Export as JSON
               </DropdownMenuItem>
+              {onExportAsTemplate && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onExportAsTemplate(project);
+                }}>
+                  <FileBox className="mr-2 h-4 w-4" />
+                  Export as Template
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();

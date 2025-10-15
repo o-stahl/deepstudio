@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { VirtualServer } from '@/lib/preview/virtual-server';
-import { 
-  CompiledProject, 
-  PreviewMessage, 
-  FocusContextPayload, 
-  PreviewHostMessage 
+import {
+  CompiledProject,
+  PreviewMessage,
+  FocusContextPayload,
+  PreviewHostMessage
 } from '@/lib/preview/types';
 import { vfs } from '@/lib/vfs';
 import { Button } from '@/components/ui/button';
-import { 
-  RefreshCw, 
-  Smartphone, 
-  Tablet, 
+import {
+  RefreshCw,
+  Smartphone,
+  Tablet,
   Monitor,
   ChevronLeft,
   ChevronRight,
@@ -24,6 +24,11 @@ import {
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, logger } from '@/lib/utils';
+import { captureIframeScreenshot } from '@/lib/utils/screenshot';
+
+export interface MultipagePreviewHandle {
+  captureScreenshot: () => Promise<string | null>;
+}
 
 interface MultipagePreviewProps {
   projectId: string;
@@ -43,13 +48,13 @@ const DEVICE_SIZES: Record<DeviceSize, { width?: string; height?: string; maxHei
   responsive: { width: '100%', height: '100%' }
 };
 
-const MultipagePreviewComponent = ({
+const MultipagePreviewComponent = forwardRef<MultipagePreviewHandle, MultipagePreviewProps>(({
   projectId,
   refreshTrigger,
   onFocusSelection,
   hasFocusTarget = false,
   onClose
-}: MultipagePreviewProps) => {
+}, ref) => {
   const [compiledProject, setCompiledProject] = useState<CompiledProject | null>(null);
   const [activePath, setActivePath] = useState('/');
   const [loading, setLoading] = useState(true);
@@ -74,6 +79,17 @@ const MultipagePreviewComponent = ({
   const activePathRef = useRef<string>('/');
   const pendingLoadPath = useRef<string | null>(null);
   const selectorActiveRef = useRef(false);
+
+  // Expose captureScreenshot method via ref
+  useImperativeHandle(ref, () => ({
+    captureScreenshot: async () => {
+      if (!iframeRef.current || !iframeReady) {
+        logger.warn('Cannot capture screenshot: iframe not ready');
+        return null;
+      }
+      return await captureIframeScreenshot(iframeRef.current);
+    }
+  }), [iframeReady]);
 
   const postMessageToIframe = useCallback((message: PreviewHostMessage) => {
     if (!iframeRef.current || !iframeRef.current.contentWindow) {
@@ -975,6 +991,8 @@ const MultipagePreviewComponent = ({
       </div>
     </div>
   );
-};
+});
+
+MultipagePreviewComponent.displayName = 'MultipagePreview';
 
 export const MultipagePreview = React.memo(MultipagePreviewComponent);

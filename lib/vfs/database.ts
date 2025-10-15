@@ -1,7 +1,7 @@
-import { Project, VirtualFile, FileTreeNode } from './types';
+import { Project, VirtualFile, FileTreeNode, CustomTemplate } from './types';
 
 const DB_NAME = 'osw-studio-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export class VFSDatabase {
   private db: IDBDatabase | null = null;
@@ -52,6 +52,13 @@ export class VFSDatabase {
           const checkpointStore = db.createObjectStore('checkpoints', { keyPath: 'id' });
           checkpointStore.createIndex('projectId', 'projectId', { unique: false });
           checkpointStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+
+        // Custom Templates object store
+        if (!db.objectStoreNames.contains('customTemplates')) {
+          const templateStore = db.createObjectStore('customTemplates', { keyPath: 'id' });
+          templateStore.createIndex('name', 'name', { unique: false });
+          templateStore.createIndex('importedAt', 'importedAt', { unique: false });
         }
       };
     });
@@ -211,6 +218,40 @@ export class VFSDatabase {
       createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
       updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date(),
       lastSavedAt: project.lastSavedAt ? new Date(project.lastSavedAt) : null
+    };
+  }
+
+  // Custom Templates CRUD operations
+  async saveCustomTemplate(template: CustomTemplate): Promise<void> {
+    const tx = this.getDB().transaction(['customTemplates'], 'readwrite');
+    const store = tx.objectStore('customTemplates');
+    await this.promisify(store.put(template));
+  }
+
+  async getCustomTemplate(id: string): Promise<CustomTemplate | null> {
+    const tx = this.getDB().transaction(['customTemplates'], 'readonly');
+    const store = tx.objectStore('customTemplates');
+    const result = await this.promisify(store.get(id));
+    return result ? this.hydrateCustomTemplate(result as CustomTemplate) : null;
+  }
+
+  async getAllCustomTemplates(): Promise<CustomTemplate[]> {
+    const tx = this.getDB().transaction(['customTemplates'], 'readonly');
+    const store = tx.objectStore('customTemplates');
+    const results = await this.promisify(store.getAll());
+    return results.map(t => this.hydrateCustomTemplate(t as CustomTemplate));
+  }
+
+  async deleteCustomTemplate(id: string): Promise<void> {
+    const tx = this.getDB().transaction(['customTemplates'], 'readwrite');
+    const store = tx.objectStore('customTemplates');
+    await this.promisify(store.delete(id));
+  }
+
+  private hydrateCustomTemplate(template: CustomTemplate): CustomTemplate {
+    return {
+      ...template,
+      importedAt: template.importedAt ? new Date(template.importedAt) : new Date()
     };
   }
 }

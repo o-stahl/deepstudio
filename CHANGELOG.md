@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.13.0 - 2025-10-15
+- Added Templates system for creating, managing, and sharing reusable project templates
+- Export any project as a template (.oswt file) with customizable metadata (name, description, author, version, tags, license)
+- Import templates to quickly start new projects
+- Template browser with grid/list views, search, and sorting by name, author, or file count
+- Project cards now display preview screenshots automatically captured from live preview
+- Redesigned project list view with improved 3-column desktop layout
+- Added pill-toggle navigation between Projects and Templates pages
+
 ## v1.12.0 - 2025-10-04
 - Switch between read-only exploration (Chat) and full coding mode (Code)
 - Chat mode: Read-only commands for codebase exploration and planning

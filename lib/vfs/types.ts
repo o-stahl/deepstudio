@@ -10,6 +10,8 @@ export interface Project {
   };
   lastSavedCheckpointId?: string | null;
   lastSavedAt?: Date | null;
+  previewImage?: string; // base64 data URL of project preview
+  previewUpdatedAt?: Date; // when the preview was last captured
   costTracking?: {
     totalCost: number;
     providerBreakdown: Record<string, {
@@ -176,3 +178,100 @@ export function isFileSupported(fileName: string): boolean {
 export function getMimeType(type: FileType): string {
   return MIME_TYPES[type];
 }
+
+// Template System Types
+
+export interface CustomTemplate {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  files: Array<{path: string; content: string | ArrayBuffer}>;
+  directories: string[];
+  assets?: Array<{
+    filename: string;
+    path: string;
+  }>;
+  metadata: {
+    author?: string;
+    authorUrl?: string;
+    license: string;              // Required, defaults to "personal"
+    licenseLabel?: string;        // For custom licenses
+    licenseDescription?: string;  // For custom licenses
+    tags?: string[];
+    thumbnail?: string;           // Base64 data URL
+    previewImages?: string[];     // Array of base64 images
+    downloadUrl?: string;
+  };
+  importedAt: Date;
+  updatedAt?: Date;
+}
+
+export interface LicenseOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+export const LICENSE_OPTIONS: LicenseOption[] = [
+  {
+    value: 'personal',
+    label: 'Personal Use Only',
+    description: 'Cannot be resold or used commercially'
+  },
+  {
+    value: 'commercial',
+    label: 'Commercial Use',
+    description: 'Can be used in commercial projects, cannot resell template'
+  },
+  {
+    value: 'mit',
+    label: 'MIT License',
+    description: 'Use freely, must include copyright notice'
+  },
+  {
+    value: 'apache-2.0',
+    label: 'Apache 2.0',
+    description: 'Similar to MIT, with patent protection'
+  },
+  {
+    value: 'gpl-3.0',
+    label: 'GPL 3.0',
+    description: 'Open source, derivatives must also be GPL'
+  },
+  {
+    value: 'bsd-3-clause',
+    label: 'BSD 3-Clause',
+    description: 'Permissive, cannot use author name for promotion'
+  },
+  {
+    value: 'cc-by-4.0',
+    label: 'CC BY 4.0',
+    description: 'Free use with attribution'
+  },
+  {
+    value: 'cc-by-sa-4.0',
+    label: 'CC BY-SA 4.0',
+    description: 'Free use with attribution, share-alike'
+  },
+  {
+    value: 'cc-by-nc-4.0',
+    label: 'CC BY-NC 4.0',
+    description: 'Free for non-commercial use with attribution'
+  },
+  {
+    value: 'unlicense',
+    label: 'Unlicense (Public Domain)',
+    description: 'No restrictions, completely free to use'
+  },
+  {
+    value: 'all-rights-reserved',
+    label: 'All Rights Reserved',
+    description: 'Most restrictive, requires explicit permission'
+  },
+  {
+    value: 'custom',
+    label: 'Custom License',
+    description: 'Specify your own terms'
+  }
+];
