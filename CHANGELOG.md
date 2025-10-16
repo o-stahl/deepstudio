@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.13.1 - 2025-10-17
+- Fixed streaming response parser breaking early on `finish_reason` before tool calls arrive
+- Fixed "No actions were taken" error appearing despite successful tool call execution
+- Fixed success determination to use accumulated tool calls instead of steps completed
+- Fixed SSE comment filtering to skip lines starting with `:` (removes "OPENROUTER PROCESSING" messages)
+- Enhanced json_patch error messages with detailed format guide, operation types, and examples
+- Cleared accumulated tool calls at start of new execution
+
 ## v1.13.0 - 2025-10-15
 - Added Templates system for creating, managing, and sharing reusable project templates
 - Export any project as a template (.oswt file) with customizable metadata (name, description, author, version, tags, license)

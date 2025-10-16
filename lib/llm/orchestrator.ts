@@ -334,6 +334,11 @@ export class Orchestrator {
         buffer = lines.pop() || '';
         
         for (const line of lines) {
+          // Skip SSE comments (lines starting with ':')
+          if (line.startsWith(':')) {
+            continue;
+          }
+
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') {
@@ -413,8 +418,11 @@ export class Orchestrator {
                   if (currentToolCall && toolCallBuffer && currentToolCall.function && currentToolCall.id) {
                     currentToolCall.function.arguments = toolCallBuffer;
                     toolCallsById[currentToolCall.id] = currentToolCall as ToolCall;
+                    currentToolCall = null;
+                    toolCallBuffer = '';
                   }
-                  break;
+                  // Don't break - continue processing for usage info
+                  // The stream ends with [DONE], not finish_reason
                 }
 
                 // Check for reasoning field (some models output their thinking here)
@@ -799,9 +807,9 @@ export class Orchestrator {
     logger.debug(`[Orchestrator] Final response`, {
       contentLength: content.length,
       toolCallsCount: toolCallsArray.length,
-      toolCalls: toolCallsArray.map(tc => ({ id: tc.id, name: tc.function?.name, argsLength: tc.function?.arguments?.length }))
+      toolNames: toolCallsArray.map(tc => tc.function?.name)
     });
-    
+
     return { content, toolCalls: toolCallsArray, usage: usageInfo };
   }
 
@@ -871,6 +879,7 @@ export class Orchestrator {
     this.evaluationReceived = false;
     this.globalToolIndex = 0; // Reset tool index for new user message
     this.lastToolCallSignature = null; // Reset loop detection for new execution
+    this.accumulatedToolCalls = []; // Clear accumulated tool calls
 
     try {
       // Snapshot current state before running tools
@@ -920,12 +929,12 @@ export class Orchestrator {
           };
         }
 
-        this.onProgress?.('iteration', { 
-          current: iterations + 1, 
+        this.onProgress?.('iteration', {
+          current: iterations + 1,
           max: this.maxIterations,
-          stepsCompleted: this.stepsCompleted 
+          stepsCompleted: this.stepsCompleted
         });
-        
+
         const { provider, apiKey, model } = this.getProviderConfig();
         const tools = this.getAvailableTools();
 
@@ -940,18 +949,13 @@ export class Orchestrator {
           apiKey,
           model
         );
-        
+
+
         logger.debug(`[Orchestrator] Iteration ${iterations + 1} - Response`, {
           hasContent: !!response.content,
-          contentLength: response.content?.length || 0,
-          contentPreview: response.content?.substring(0, 200),
-          toolCallsCount: response.toolCalls?.length || 0,
-          toolCalls: response.toolCalls?.map(tc => ({
-            name: tc.function?.name,
-            args: tc.function?.arguments?.substring(0, 100)
-          }))
+          toolCallsCount: response.toolCalls?.length || 0
         });
-        
+
         // Handle empty or content-only responses
         if (!response.toolCalls || response.toolCalls.length === 0) {
           logger.debug(`[Orchestrator] No tool calls in response`);
@@ -1032,7 +1036,6 @@ export class Orchestrator {
         
         // Notify about tool calls
         if (response.toolCalls && response.toolCalls.length > 0) {
-          logger.debug(`[Orchestrator] Sending ${response.toolCalls.length} tool calls to UI`);
           this.onProgress?.('toolCalls', { toolCalls: response.toolCalls });
         }
         
@@ -1118,13 +1121,13 @@ export class Orchestrator {
       }
       
       logger.info(`[Orchestrator] Execution completed after ${this.maxIterations} iterations max. Steps: ${this.stepsCompleted}`);
-      
+
       // Generate summary
       const summary = this.generateSummary();
       await this.recordAutoCheckpoint(`After completion: ${userPrompt.substring(0, 60)}`);
-      
+
       return {
-        success: this.stepsCompleted > 0,
+        success: this.accumulatedToolCalls.length > 0,
         summary,
         stepsCompleted: this.stepsCompleted,
         checkpointId: this.lastCheckpointId ?? undefined,
@@ -1132,9 +1135,8 @@ export class Orchestrator {
         totalCost: this.totalCost,
         usageInfo: this.totalUsage
       };
-      
+
     } catch (error) {
-      logger.error('Orchestrator error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorStack = error instanceof Error ? error.stack : undefined;
 
@@ -1143,7 +1145,7 @@ export class Orchestrator {
         message: errorMessage,
         stack: errorStack,
         stepsCompleted: this.stepsCompleted,
-        chatMode: this.chatMode
+        toolCallsAccumulated: this.accumulatedToolCalls.length
       });
 
       try {
@@ -1399,10 +1401,10 @@ Examples:
           });
           
           this.stepsCompleted++;
-          
+
           // Update tool status
           this.onProgress?.('tool_status', {
-            toolIndex: currentToolIndex, 
+            toolIndex: currentToolIndex,
             status: result.applied ? 'completed' : 'failed',
             result: resultMessage
           });
@@ -1419,7 +1421,7 @@ Examples:
             await this.recordAutoCheckpoint(`After step ${this.stepsCompleted}`);
             this.triggerFileExplorerRefresh();
           }
-          
+
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           toolResults.push({
@@ -1427,7 +1429,7 @@ Examples:
             tool_call_id: toolId,
             content: `Error: ${errorMessage}`
           });
-          
+
           // Update tool status to failed
           this.onProgress?.('tool_status', {
             toolIndex: currentToolIndex,
@@ -1810,7 +1812,7 @@ ${output}`;
       return summary;
     }
 
-    if (this.stepsCompleted === 0) {
+    if (this.accumulatedToolCalls.length === 0) {
       return 'No actions were taken.';
     }
 

@@ -35,8 +35,33 @@ export async function execStringPatch(
   if (!operations || operations.length === 0) {
     return {
       applied: false,
-      summary: 'No operations provided',
-      warnings: ['No patch operations to apply']
+      summary: 'Missing operations parameter',
+      warnings: [`json_patch requires an operations array with at least one operation.
+
+Required format:
+{
+  "file_path": "/path/to/file",
+  "operations": [
+    {
+      "type": "update",
+      "oldStr": "exact text to find",
+      "newStr": "replacement text"
+    }
+  ]
+}
+
+Operation types:
+• update: Replace exact string (oldStr must be unique in file)
+• rewrite: Replace entire file content
+• replace_entity: Replace entire code entity (function, class, etc.) by its opening pattern
+
+Examples:
+✅ Update text: {"file_path": "/index.html", "operations": [{"type": "update", "oldStr": "<title>Old</title>", "newStr": "<title>New</title>"}]}
+✅ Rewrite file: {"file_path": "/style.css", "operations": [{"type": "rewrite", "content": "body { margin: 0; }"}]}
+✅ Replace function: {"file_path": "/app.js", "operations": [{"type": "replace_entity", "selector": "function myFunc()", "replacement": "function myFunc() { return true; }"}]}
+
+❌ Wrong - Missing operations: {"file_path": "/file.js"}
+❌ Wrong - Empty operations: {"file_path": "/file.js", "operations": []}`]
     };
   }
 

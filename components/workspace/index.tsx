@@ -866,6 +866,7 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
     }
 
     const trimmedPrompt = prompt.trim();
+
     if (!trimmedPrompt) {
       toast.error('Please enter a prompt');
       return;
@@ -1257,6 +1258,14 @@ export function Workspace({ project, onBack }: WorkspaceProps) {
         setCurrentOrchestrator(orchestrator);
 
         const result = await orchestrator.execute(messageContent);
+
+        logger.debug('[Workspace] Orchestrator result:', {
+          success: result.success,
+          stepsCompleted: result.stepsCompleted,
+          summaryPreview: result.summary?.substring(0, 100),
+          hasCost: !!result.totalCost,
+          hasUsage: !!result.usageInfo
+        });
 
         // Attach checkpoint and usage to the current streamed assistant message
         setMessages(prev => {
