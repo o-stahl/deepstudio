@@ -1169,6 +1169,34 @@ export class Orchestrator {
   /**
    * Generate a normalized signature for a tool call to detect duplicates
    */
+  /**
+   * Create a stable hash of a string
+   */
+  private hashString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash.toString(36);
+  }
+
+  /**
+   * Stable JSON stringify that sorts object keys recursively
+   */
+  private stableStringify(obj: any): string {
+    return JSON.stringify(obj, (key, value) => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return Object.keys(value).sort().reduce((sorted: any, key) => {
+          sorted[key] = value[key];
+          return sorted;
+        }, {});
+      }
+      return value;
+    });
+  }
+
   private getToolCallSignature(toolCall: ToolCall): string {
     const toolName = toolCall.function?.name || 'unknown';
 
@@ -1184,8 +1212,21 @@ export class Orchestrator {
         return `shell:${cmd}`;
       }
 
-      // For other tools, use JSON string of sorted keys
-      const sortedArgs = JSON.stringify(args, Object.keys(args).sort());
+      // For json_patch, create signature from file_path + hashed operation content
+      if (toolName === 'json_patch') {
+        const filePath = args.file_path || '';
+        const ops = Array.isArray(args.operations) ? args.operations : [];
+        // Hash each operation to avoid huge signatures while maintaining uniqueness
+        const opSignature = ops.map((op: any) => {
+          const type = op.type || '';
+          const contentHash = this.hashString(JSON.stringify(op));
+          return `${type}:${contentHash}`;
+        }).join('|');
+        return `json_patch:${filePath}:${opSignature}`;
+      }
+
+      // For other tools, use stable JSON stringify with recursive key sorting
+      const sortedArgs = this.stableStringify(args);
       return `${toolName}:${sortedArgs}`;
     } catch {
       // If we can't parse arguments, use raw arguments string

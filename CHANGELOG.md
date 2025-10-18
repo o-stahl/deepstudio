@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.13.2 - 2025-10-19
+- Fixed duplicate tool call detection producing false positives for different json_patch operations
+
 ## v1.13.1 - 2025-10-17
 - Fixed streaming response parser breaking early on `finish_reason` before tool calls arrive
 - Fixed "No actions were taken" error appearing despite successful tool call execution
