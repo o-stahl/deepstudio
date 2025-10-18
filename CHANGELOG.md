@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.13.4 - 2025-10-19
+- Enhanced Handlebars with `limit` helper for displaying subset of array items
+- Improved json_patch error messages to detect and guide LLMs when operations are incorrectly stringified
+- Simplified loop detection logic for more accurate duplicate tool call prevention
+
 ## v1.13.3 - 2025-10-19
 - Fixed "New Project" dialog to show custom imported templates in dropdown
 - Refactored built-in template definitions into centralized registry

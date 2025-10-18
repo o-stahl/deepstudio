@@ -497,7 +497,74 @@ Available Handlebars Features:
 - Built-in helpers: eq, ne, lt, gt, lte, gte, and, or, not
 - Math helpers: add, subtract, multiply, divide
 - String helpers: uppercase, lowercase, concat
+- Array helpers: limit
 - Utility helpers: json, formatDate
+
+ADVANCED HELPER EXAMPLES:
+
+Filtering and Querying Data:
+{{! Filter products by category }}
+{{#each products}}
+  {{#if (eq category "electronics")}}
+    <div class="product">{{name}}: \${{price}}</div>
+  {{/if}}
+{{/each}}
+
+{{! Show only items above price threshold }}
+{{#each products}}
+  {{#if (gt price 100)}}
+    <div class="premium-product">{{uppercase name}} - \${{price}}</div>
+  {{/if}}
+{{/each}}
+
+{{! Limit number of items displayed }}
+{{#each (limit products 5)}}
+  <div>{{name}} - \${{price}}</div>
+{{/each}}
+
+Complex Logic:
+{{! Multiple conditions with AND/OR }}
+{{#each products}}
+  {{#if (and (eq featured true) (or (eq category "new") (lt price 50)))}}
+    ⭐ Featured Deal: {{name}}
+  {{/if}}
+{{/each}}
+
+{{! Negative conditions }}
+{{#each users}}
+  {{#if (not verified)}}
+    <span class="warning">{{name}} needs verification</span>
+  {{/if}}
+{{/each}}
+
+String and Math Operations:
+{{! Dynamic pricing display }}
+<div class="price">
+  {{#if onSale}}
+    Was: \${{price}} | Now: \${{subtract price discount}}
+  {{else}}
+    \${{price}}
+  {{/if}}
+</div>
+
+{{! String manipulation }}
+<h1>{{uppercase title}}</h1>
+<p class="author">By {{concat firstName " " lastName}}</p>
+
+{{! Date formatting }}
+<time>Published: {{formatDate publishedAt}}</time>
+
+Nested Data Access:
+{{! Access nested properties }}
+{{#with user.profile}}
+  <div>{{name}} - {{email}}</div>
+  {{#each interests}}
+    <span>{{this}}</span>
+  {{/each}}
+{{/with}}
+
+{{! Debug data structures }}
+<pre>{{json data}}</pre>
 `;
 
   if (fileTree) {

@@ -32,6 +32,34 @@ export async function execStringPatch(
     };
   }
 
+  // Detect stringified operations (common LLM serialization error)
+  if (typeof operations === 'string') {
+    return {
+      applied: false,
+      summary: 'Invalid operations format - received string instead of array',
+      warnings: [`The operations parameter is a JSON string instead of an array.
+
+You sent:  "operations": "[{...}]"  (STRING - JSON serialized)
+Correct:   "operations": [{...}]    (ARRAY - direct object)
+
+Do not stringify the operations array. Pass it directly as an array of objects.
+
+Correct format:
+{
+  "file_path": "/path/to/file",
+  "operations": [
+    {"type": "update", "oldStr": "exact text", "newStr": "replacement"}
+  ]
+}
+
+NOT this (wrong):
+{
+  "file_path": "/path/to/file",
+  "operations": "[{\\"type\\": \\"update\\", \\"oldStr\\": \\"exact text\\", \\"newStr\\": \\"replacement\\"}]"
+}`]
+    };
+  }
+
   if (!operations || operations.length === 0) {
     return {
       applied: false,
@@ -159,7 +187,24 @@ Examples:
           }
           
         } else {
-          warnings.push(`Operation ${i + 1}: Unknown operation type: ${(op as any).type}`);
+          const receivedType = (op as any).type;
+          const receivedKeys = Object.keys(op || {});
+          warnings.push(`Operation ${i + 1}: Unknown or missing operation type.
+
+Received type: ${receivedType === undefined ? 'undefined (missing or malformed "type" key)' : `"${receivedType}"`}
+Received keys in operation: ${receivedKeys.length > 0 ? receivedKeys.join(', ') : 'none'}
+
+Valid operation types: "update", "rewrite", "replace_entity"
+
+Common mistakes:
+• Malformed key name like "\\"type\\"" instead of "type" (check JSON escaping)
+• Missing "type" field entirely
+• Typo in type value (e.g., "rewite" instead of "rewrite")
+
+Correct formats:
+{"type": "update", "oldStr": "exact text to find", "newStr": "replacement"}
+{"type": "rewrite", "content": "complete new file content"}
+{"type": "replace_entity", "selector": "opening pattern", "replacement": "new entity content"}`);
         }
         
       } catch (error: any) {

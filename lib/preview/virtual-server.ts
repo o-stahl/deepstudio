@@ -66,6 +66,11 @@ export class VirtualServer {
       const d = new Date(date);
       return d.toLocaleDateString();
     });
+
+    // Array helpers
+    this.handlebars.registerHelper('limit', (array: any[], max: number) =>
+      array?.slice(0, max)
+    );
   }
 
   private async registerPartials(): Promise<void> {

@@ -1212,17 +1212,12 @@ export class Orchestrator {
         return `shell:${cmd}`;
       }
 
-      // For json_patch, create signature from file_path + hashed operation content
+      // For json_patch, create signature from file_path + hashed operations
       if (toolName === 'json_patch') {
         const filePath = args.file_path || '';
-        const ops = Array.isArray(args.operations) ? args.operations : [];
-        // Hash each operation to avoid huge signatures while maintaining uniqueness
-        const opSignature = ops.map((op: any) => {
-          const type = op.type || '';
-          const contentHash = this.hashString(JSON.stringify(op));
-          return `${type}:${contentHash}`;
-        }).join('|');
-        return `json_patch:${filePath}:${opSignature}`;
+        // Hash entire operations parameter (string, array, or missing)
+        const opsHash = this.hashString(JSON.stringify(args.operations || null));
+        return `json_patch:${filePath}:${opsHash}`;
       }
 
       // For other tools, use stable JSON stringify with recursive key sorting
