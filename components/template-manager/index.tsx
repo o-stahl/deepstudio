@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { CustomTemplate } from '@/lib/vfs/types';
 import { vfs } from '@/lib/vfs';
 import { templateService } from '@/lib/vfs/template-service';
-import { createProjectFromTemplate } from '@/lib/vfs/templates';
+import { createProjectFromTemplate, BUILT_IN_TEMPLATES, type BuiltInTemplateMetadata } from '@/lib/vfs/templates';
 import { BAREBONES_PROJECT_TEMPLATE, DEMO_PROJECT_TEMPLATE } from '@/lib/vfs/project-templates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,45 +36,8 @@ interface TemplateManagerProps {
   onProjectCreated?: (projectId: string) => void;
 }
 
-interface BuiltInTemplate {
-  id: string;
-  name: string;
-  description: string;
-  isBuiltIn: true;
-  updatedAt: Date;
-  metadata?: {
-    author?: string;
-    tags?: string[];
-  };
-}
-
 type SortOption = 'updated' | 'name' | 'author' | 'files';
 type ViewMode = 'grid' | 'list';
-
-const builtInTemplates: BuiltInTemplate[] = [
-  {
-    id: 'blank',
-    name: 'Blank',
-    description: 'Minimal starting template with basic HTML/CSS/JS structure',
-    isBuiltIn: true,
-    updatedAt: new Date('2025-01-01T00:00:00Z'),
-    metadata: {
-      author: 'OSW Studio',
-      tags: ['starter', 'basic']
-    }
-  },
-  {
-    id: 'demo',
-    name: 'Example Studios',
-    description: 'Multi-page agency portfolio showcasing modern web development',
-    isBuiltIn: true,
-    updatedAt: new Date('2025-01-01T00:00:00Z'),
-    metadata: {
-      author: 'OSW Studio',
-      tags: ['portfolio', 'multi-page', 'example']
-    }
-  }
-];
 
 export function TemplateManager({ onProjectCreated }: TemplateManagerProps) {
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
@@ -137,7 +100,7 @@ export function TemplateManager({ onProjectCreated }: TemplateManagerProps) {
     }
   };
 
-  const handleExportTemplate = async (template: CustomTemplate | BuiltInTemplate) => {
+  const handleExportTemplate = async (template: CustomTemplate | BuiltInTemplateMetadata) => {
     try {
       // For built-in templates, create a custom template export
       if ('isBuiltIn' in template && template.isBuiltIn) {
@@ -202,7 +165,7 @@ export function TemplateManager({ onProjectCreated }: TemplateManagerProps) {
     }
   };
 
-  const handleCreateProject = async (template: CustomTemplate | BuiltInTemplate) => {
+  const handleCreateProject = async (template: CustomTemplate | BuiltInTemplateMetadata) => {
     try {
       const projectName = template.name === 'Blank' || template.name === 'Example Studios'
         ? `New ${template.name} Project`
@@ -247,8 +210,8 @@ export function TemplateManager({ onProjectCreated }: TemplateManagerProps) {
   };
 
   // Combine all templates
-  const allTemplates: (CustomTemplate | BuiltInTemplate)[] = [
-    ...builtInTemplates,
+  const allTemplates: (CustomTemplate | BuiltInTemplateMetadata)[] = [
+    ...BUILT_IN_TEMPLATES,
     ...customTemplates
   ];
 

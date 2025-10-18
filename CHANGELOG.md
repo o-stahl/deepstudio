@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.13.3 - 2025-10-19
+- Fixed "New Project" dialog to show custom imported templates in dropdown
+- Refactored built-in template definitions into centralized registry
+
 ## v1.13.2 - 2025-10-19
 - Fixed duplicate tool call detection producing false positives for different json_patch operations
 

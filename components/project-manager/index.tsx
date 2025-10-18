@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Project } from '@/lib/vfs/types';
+import { Project, CustomTemplate } from '@/lib/vfs/types';
 import { vfs } from '@/lib/vfs';
+import { templateService } from '@/lib/vfs/template-service';
 import { logger } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,16 +37,19 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { 
+import {
   BAREBONES_PROJECT_TEMPLATE,
   DEMO_PROJECT_TEMPLATE,
   createProjectFromTemplate,
-  type AssetConfig
+  type AssetConfig,
+  BUILT_IN_TEMPLATES
 } from '@/lib/vfs/project-templates';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -77,7 +81,19 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
-  const [newProjectTemplate, setNewProjectTemplate] = useState<'blank' | 'demo'>('blank');
+  const [newProjectTemplate, setNewProjectTemplate] = useState<string>('blank');
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
+
+  // Helper to get template name from ID for display
+  const getTemplateDisplayName = (templateId: string): string => {
+    if (templateId.startsWith('custom:')) {
+      const customId = templateId.replace('custom:', '');
+      const template = customTemplates.find(t => t.id === customId);
+      return template?.name || 'Custom Template';
+    }
+    const builtIn = BUILT_IN_TEMPLATES.find(t => t.id === templateId);
+    return builtIn?.name || 'Select a template';
+  };
   const [sortBy, setSortBy] = useState<SortOption>('updated');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [previewProject, setPreviewProject] = useState<Project | null>(null);
@@ -92,34 +108,47 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
   const loadingRef = useRef(false);
   const demoCreationRef = useRef(false);
 
+  const loadCustomTemplates = useCallback(async () => {
+    try {
+      const templates = await templateService.listCustomTemplates();
+      setCustomTemplates(templates);
+    } catch (error) {
+      logger.error('Failed to load custom templates:', error);
+      // Don't show error toast - this is background loading
+    }
+  }, []);
+
   const loadProjects = useCallback(async () => {
     // Prevent concurrent executions
     if (loadingRef.current) {
       return;
     }
-    
+
     loadingRef.current = true;
     setLoading(true);
-    
+
     try {
       await vfs.init();
       const projectList = await vfs.listProjects();
-      const sorted = projectList.sort((a, b) => 
+      const sorted = projectList.sort((a, b) =>
         b.updatedAt.getTime() - a.updatedAt.getTime()
       );
       setProjects(sorted);
       setProjectList(sorted);
-      
+
+      // Also load custom templates
+      await loadCustomTemplates();
+
     } catch (error) {
       logger.error('Failed to load projects:', error);
       toast.error('Failed to load projects');
-      
+
     } finally {
       setLoading(false);
       setInitialLoadComplete(true);
       loadingRef.current = false;
     }
-  }, [setProjectList]);
+  }, [setProjectList, loadCustomTemplates]);
 
   // Separate function for reloading projects without demo creation logic
   const reloadProjects = useCallback(async () => {
@@ -228,10 +257,35 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
         newProjectDescription.trim().slice(0, 200) || undefined
       );
 
-      if (newProjectTemplate === 'demo') {
-        await createProjectFromTemplate(vfs, project.id, DEMO_PROJECT_TEMPLATE, DEMO_PROJECT_TEMPLATE.assets);
+      // Apply selected template
+      if (newProjectTemplate.startsWith('custom:')) {
+        // Custom template from IndexedDB
+        const customTemplateId = newProjectTemplate.replace('custom:', '');
+        const customTemplate = customTemplates.find(t => t.id === customTemplateId);
+
+        if (customTemplate) {
+          await createProjectFromTemplate(vfs, project.id, {
+            name: customTemplate.name,
+            description: customTemplate.description,
+            files: customTemplate.files.map(f => ({
+              path: f.path,
+              content: typeof f.content === 'string' ? f.content : new TextDecoder().decode(f.content as ArrayBuffer)
+            })),
+            directories: customTemplate.directories,
+            assets: customTemplate.assets
+          });
+        }
       } else {
-        await createProjectFromTemplate(vfs, project.id, BAREBONES_PROJECT_TEMPLATE);
+        // Built-in template
+        switch (newProjectTemplate) {
+          case 'demo':
+            await createProjectFromTemplate(vfs, project.id, DEMO_PROJECT_TEMPLATE, DEMO_PROJECT_TEMPLATE.assets);
+            break;
+          case 'blank':
+          default:
+            await createProjectFromTemplate(vfs, project.id, BAREBONES_PROJECT_TEMPLATE);
+            break;
+        }
       }
 
       toast.success('Project created successfully');
@@ -724,14 +778,38 @@ export function ProjectManager({ onProjectSelect }: ProjectManagerProps) {
               <Label htmlFor="template">Template</Label>
               <Select
                 value={newProjectTemplate}
-                onValueChange={(value) => setNewProjectTemplate(value as 'blank' | 'demo')}
+                onValueChange={setNewProjectTemplate}
               >
-                <SelectTrigger id="template" className="mt-2">
-                  <SelectValue placeholder="Select a template" />
+                <SelectTrigger id="template" className="mt-2 w-full">
+                  <div className="truncate flex-1 text-left">
+                    {getTemplateDisplayName(newProjectTemplate)}
+                  </div>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="blank">Blank (HTML/CSS/JS starter)</SelectItem>
-                  <SelectItem value="demo">Demo (multi-page example)</SelectItem>
+                  <SelectGroup>
+                    <SelectLabel>Built-in Templates</SelectLabel>
+                    {BUILT_IN_TEMPLATES.map(template => (
+                      <SelectItem key={template.id} value={template.id}>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="font-medium">{template.name}</div>
+                          <div className="text-xs text-muted-foreground">{template.description}</div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                  {customTemplates.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Custom Templates</SelectLabel>
+                      {customTemplates.map(template => (
+                        <SelectItem key={template.id} value={`custom:${template.id}`}>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="font-medium">{template.name}</div>
+                            <div className="text-xs text-muted-foreground">{template.description}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
                 </SelectContent>
               </Select>
             </div>

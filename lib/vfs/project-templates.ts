@@ -18,5 +18,9 @@ export {
   DEMO_PROJECT_TEMPLATE,
   BAREBONES_PROJECT_TEMPLATE,
   createProjectFromTemplate,
-  type AssetConfig
+  type AssetConfig,
+  BUILT_IN_TEMPLATES,
+  getBuiltInTemplate,
+  getBuiltInTemplateIds,
+  type BuiltInTemplateMetadata
 } from './templates';
